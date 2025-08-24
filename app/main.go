@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"io"
 )
 
 // Ensures gofmt doesn't remove the "net" and "os" imports in stage 1 (feel free to remove this!)
@@ -26,9 +27,38 @@ func main() {
 			os.Exit(1)
 		}
 
-		conn.Write([]byte("+PONG\r\n"))
+		go handleConnection(conn)
 	}
-	
 
+}
+
+
+func handleConnection(conn net.Conn) {
+	defer conn.Close()
+	fmt.Println("Handling Connection")
+
+	buf := make([]byte, 128)
+
+	for {
+		n, _ := conn.Read(buf)
+
+		fmt.Printf("Command Received: %s\n", buf[:n])
+		
+		conn.Write([]byte("+PONG\r\n"))
+		
+	}
+
+	// scanner := bufio.NewScanner(conn)
+
+	data, err := io.ReadAll(conn)
+	if err != nil {
+		fmt.Println("Error reading from connection:", err)
+		return
+	}
+
+	fmt.Printf("Data Recieved: %s", data)
+
+	fmt.Fprint(conn, "+PONG\r\n")
+	
 	
 }
