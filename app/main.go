@@ -9,14 +9,20 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 )
 
 const (
 	CLRF = "\r\n"
 )
 
+type Value struct {
+	value string
+	expiration time.Time
+}
+
 var (
-	store = make(map[string]string)
+	store = make(map[string]Value)
 	storeMutex sync.RWMutex
 )
 
@@ -81,6 +87,7 @@ func handleConnection(conn net.Conn) {
 		if strings.HasPrefix(line, "*") {
 			// _, _ = reader.ReadString('\n')
 			// count, _ := strconv.Atoi(line[1:])
+			currentTime := time.Now()
 			
 				// Read bulk string length
 			lengthLine, _ := reader.ReadString('\n')
@@ -106,12 +113,18 @@ func handleConnection(conn net.Conn) {
 				_, _ = reader.ReadString('\n')
 				key, _ := reader.ReadString('\n')
 				key = strings.TrimSpace(key)
+
 				storeMutex.RLock()
+				
 				value := store[key]
+				if !value.expiration.IsZero() && currentTime.Compare(value.expiration) >= 0 {
+					delete(store, key)
+				}
+				value = store[key]
 
 				log.Println("GET: key and value are: ", key, value)
 
-				conn.Write([]byte(buildRESPBulkString(value)))
+				conn.Write([]byte(buildRESPBulkString(value.value)))
 				storeMutex.RUnlock()
 			case "SET":
 				_, _ = reader.ReadString('\n')
@@ -120,11 +133,28 @@ func handleConnection(conn net.Conn) {
 				_, _ = reader.ReadString('\n')
 				value, _ := reader.ReadString('\n')
 				value = strings.TrimSpace(value)
+				log.Println("Printing the value here", value)
+				var expirationTime time.Time
+				conn.SetReadDeadline(time.Now().Add(5 * time.Millisecond)) // Short timeout
+				_ , err := reader.ReadString('\n')
+				conn.SetReadDeadline(time.Time{}) // Reset deadline
+
+				if err == nil {
+					log.Println("No Error")
+					_, _ = reader.ReadString('\n') // get px
+					_, _ = reader.ReadString('\n')
+					expirationStr, _ := reader.ReadString('\n')
+					expirationDuration, _ := strconv.Atoi(strings.TrimSpace(expirationStr))
+					expirationTime = time.Now().Add(time.Duration(expirationDuration * int(time.Millisecond)))
+				} else {
+					log.Println("error should be printed here: ")
+				}
+				log.Println("error message is: ", err)
 
 				log.Println("GET: key and value are: ", key, value)
 				
 				storeMutex.Lock()
-				store[key] = value
+				store[key] = Value{value, expirationTime}
 				storeMutex.Unlock()
 
 				conn.Write([]byte(buildRESPSimpleString("OK")))
