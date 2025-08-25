@@ -4,7 +4,9 @@ import (
 	"fmt"
 	"net"
 	"os"
-	"io"
+	"strings"
+	"strconv"
+	"bufio"
 )
 
 // Ensures gofmt doesn't remove the "net" and "os" imports in stage 1 (feel free to remove this!)
@@ -26,7 +28,6 @@ func main() {
 			fmt.Println("Error accepting connection: ", err.Error())
 			os.Exit(1)
 		}
-
 		go handleConnection(conn)
 	}
 
@@ -37,28 +38,38 @@ func handleConnection(conn net.Conn) {
 	defer conn.Close()
 	fmt.Println("Handling Connection")
 
-	buf := make([]byte, 128)
-
+	reader := bufio.NewReader(conn)
+	
 	for {
-		n, _ := conn.Read(buf)
-
-		fmt.Printf("Command Received: %s\n", buf[:n])
+		// Read until \r\n
+		line, err := reader.ReadString('\n')
+		if err != nil {
+			fmt.Printf("Connection closed: %v\n", err)
+			break
+		}
 		
-		conn.Write([]byte("+PONG\r\n"))
+		line = strings.TrimSpace(line)
+		fmt.Printf("Data Received: %s\n", line)
 		
+		// Parse RESP array
+		if strings.HasPrefix(line, "*") {
+			count, _ := strconv.Atoi(line[1:])
+			
+			for i := 0; i < count; i++ {
+				// Read bulk string length
+				lengthLine, _ := reader.ReadString('\n')
+				lengthLine = strings.TrimSpace(lengthLine)
+				fmt.Printf("Length: %s\n", lengthLine)
+				
+				// Read bulk string data
+				dataLine, _ := reader.ReadString('\n')
+				command := strings.TrimSpace(dataLine)
+				fmt.Printf("Command: %s\n", command)
+				
+				if command == "PING" {
+					conn.Write([]byte("+PONG\r\n"))
+				}
+			}
+		}
 	}
-
-	// scanner := bufio.NewScanner(conn)
-
-	data, err := io.ReadAll(conn)
-	if err != nil {
-		fmt.Println("Error reading from connection:", err)
-		return
-	}
-
-	fmt.Printf("Data Recieved: %s", data)
-
-	fmt.Fprint(conn, "+PONG\r\n")
-	
-	
 }
