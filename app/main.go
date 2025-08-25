@@ -1,12 +1,13 @@
 package main
 
 import (
+	"bufio"
 	"fmt"
+	"log"
 	"net"
 	"os"
-	"strings"
 	"strconv"
-	"bufio"
+	"strings"
 )
 
 // Ensures gofmt doesn't remove the "net" and "os" imports in stage 1 (feel free to remove this!)
@@ -47,6 +48,8 @@ func handleConnection(conn net.Conn) {
 			fmt.Printf("Connection closed: %v\n", err)
 			break
 		}
+
+		log.Println("Value of first line is: ", line)
 		
 		line = strings.TrimSpace(line)
 		fmt.Printf("Data Received: %s\n", line)
@@ -66,8 +69,17 @@ func handleConnection(conn net.Conn) {
 				command := strings.TrimSpace(dataLine)
 				fmt.Printf("Command: %s\n", command)
 				
-				if command == "PING" {
+				switch command {
+				case "PING":
 					conn.Write([]byte("+PONG\r\n"))
+				case "ECHO":
+					lenEchoStr, _ := reader.ReadString('\n')
+					lenEchoStr = strings.TrimSpace(lenEchoStr)
+					log.Println("Length of the echoed string: ", lenEchoStr)
+					echoStr, _ := reader.ReadString('\n')
+					echoStr = strings.TrimSpace(echoStr)
+
+					conn.Write([]byte(lenEchoStr + "\r\n" + echoStr + "\r\n"))
 				}
 			}
 		}
