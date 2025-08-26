@@ -6,6 +6,7 @@ import (
 	"log"
 	"net"
 	"os"
+	"reflect"
 	"strconv"
 	"strings"
 	"sync"
@@ -14,6 +15,12 @@ import (
 
 const (
 	CLRF = "\r\n"
+	RESPONSE_OK = "OK"
+	RESPONSE_NONE = "none"
+)
+
+var (
+	RESP_ZERO_REQUEST = []string{}
 )
 
 type Value struct {
@@ -64,101 +71,138 @@ func buildRESPSimpleString(s string) string {
 }
 
 
+func parseRESPRequest(reader *bufio.Reader) []string {
+	respRequest := []string{}
+	numOfLine, err := reader.ReadString('\n')
+	numOfLine = strings.TrimSpace(numOfLine)
+	log.Println("numOfLine is: ", numOfLine)
+	
+	// RESP format check
+	if err != nil || !strings.HasPrefix(numOfLine, "*") {
+		log.Println("invalid RESP command")
+		return RESP_ZERO_REQUEST 
+	}
+
+	lines, err := strconv.Atoi(numOfLine[1:])
+	if err != nil {
+    log.Printf("Error converting to int: %v, input was: %q", err, numOfLine[1:])
+		return RESP_ZERO_REQUEST
+	}
+
+
+	for i := 0; i < lines; i += 1 {
+		_, err := reader.ReadString('\n')
+		if err != nil {
+			return RESP_ZERO_REQUEST 
+		}
+
+		command, er := reader.ReadString('\n')
+		command = strings.TrimSpace(command)
+		if er != nil {
+			return RESP_ZERO_REQUEST 
+		}
+
+		respRequest = append(respRequest, command)
+	}
+
+	return respRequest
+}
+
+func isValueExpired(value Value, currentTime time.Time) bool {
+	return !value.expiration.IsZero() && currentTime.Compare(value.expiration) >= 0 
+}
+
+
+
 func handleConnection(conn net.Conn) {
 	defer conn.Close()
 	fmt.Println("Handling Connection")
 
+	var respRequest []string
 	reader := bufio.NewReader(conn)
 	
 	for {
-		// Read until \r\n
-		line, err := reader.ReadString('\n')
-		if err != nil {
-			fmt.Printf("Connection closed: %v\n", err)
+		// currentTime := time.Now()
+		respRequest = parseRESPRequest(reader)
+		log.Println("RESP Request, ", respRequest)
+
+		if len(respRequest) == 0 {
+			// Client disconnected or no more commands
+			log.Println("Connection closed or no data received")
 			break
 		}
 
-		log.Println("Value of first line is: ", line)
-		
-		line = strings.TrimSpace(line)
-		fmt.Printf("Data Received: %s\n", line)
-		
-		// Parse RESP array
-		if strings.HasPrefix(line, "*") {
-			// _, _ = reader.ReadString('\n')
-			// count, _ := strconv.Atoi(line[1:])
-			currentTime := time.Now()
-			
-				// Read bulk string length
-			lengthLine, _ := reader.ReadString('\n')
-			lengthLine = strings.TrimSpace(lengthLine)
-			fmt.Printf("Length: %s\n", lengthLine)
-			
-			// Read bulk string data
-			dataLine, _ := reader.ReadString('\n')
-			command := strings.TrimSpace(dataLine)
-			fmt.Printf("Command: %s\n", command)
-			
-			switch command {
-			case "PING":
-				conn.Write([]byte("+PONG\r\n"))
-			case "ECHO":
-				_, _ = reader.ReadString('\n')
-				echoStr, _ := reader.ReadString('\n')
-				echoStr = strings.TrimSpace(echoStr)
+		command := respRequest[0]
 
-				conn.Write([]byte(buildRESPBulkString(echoStr)))
-			case "GET":
-				log.Println("GET command is executed")
-				_, _ = reader.ReadString('\n')
-				key, _ := reader.ReadString('\n')
-				key = strings.TrimSpace(key)
+		switch command {
+		case "PING":
+			conn.Write([]byte("+PONG\r\n"))
+		case "ECHO":
+			echoStr := respRequest[1]
+			conn.Write([]byte(buildRESPBulkString(echoStr)))
+		case "GET":
+			log.Println("GET command is executed")
+			key := respRequest[1]
+			var response string
 
-				storeMutex.RLock()
-				
-				value := store[key]
-				if !value.expiration.IsZero() && currentTime.Compare(value.expiration) >= 0 {
-					delete(store, key)
-				}
-				value = store[key]
-
-				log.Println("GET: key and value are: ", key, value)
-
-				conn.Write([]byte(buildRESPBulkString(value.value)))
+			storeMutex.RLock()	
+			value, ok := store[key]
+			if ok {
+				needsDelete := isValueExpired(value, time.Now()) 
 				storeMutex.RUnlock()
-			case "SET":
-				_, _ = reader.ReadString('\n')
-				key, _ := reader.ReadString('\n')
-				key = strings.TrimSpace(key)
-				_, _ = reader.ReadString('\n')
-				value, _ := reader.ReadString('\n')
-				value = strings.TrimSpace(value)
-				log.Println("Printing the value here", value)
-				var expirationTime time.Time
-				conn.SetReadDeadline(time.Now().Add(5 * time.Millisecond)) // Short timeout
-				_ , err := reader.ReadString('\n')
-				conn.SetReadDeadline(time.Time{}) // Reset deadline
 
-				if err == nil {
-					log.Println("No Error")
-					_, _ = reader.ReadString('\n') // get px
-					_, _ = reader.ReadString('\n')
-					expirationStr, _ := reader.ReadString('\n')
-					expirationDuration, _ := strconv.Atoi(strings.TrimSpace(expirationStr))
-					expirationTime = time.Now().Add(time.Duration(expirationDuration * int(time.Millisecond)))
+				if needsDelete {
+					storeMutex.Lock()
+					if value2, exists := store[key]; exists && isValueExpired(value2, time.Now()) {
+						delete(store, key)
+						// response remains empty string for expired key
+
+					} else {
+						response = value2.value
+					}
+					// If !exists, key was deleted by another goroutine - response stays empty
+					storeMutex.Unlock()
 				} else {
-					log.Println("error should be printed here: ")
+					response = value.value
 				}
-				log.Println("error message is: ", err)
-
-				log.Println("GET: key and value are: ", key, value)
-				
-				storeMutex.Lock()
-				store[key] = Value{value, expirationTime}
+			} else {
 				storeMutex.Unlock()
-
-				conn.Write([]byte(buildRESPSimpleString("OK")))
+				// response remains empty string for non-existent key
 			}
+			log.Println("GET: key and value are: ", key, value)
+			conn.Write([]byte(buildRESPBulkString(response)))
+		case "SET":
+			key := respRequest[1]
+			value := respRequest[2]
+			var expirationTime time.Time
+			if len(respRequest) > 4 {
+				// we have to parse expiration as well
+				expirationDuration := respRequest[4]
+				expDelta, _ := strconv.Atoi(expirationDuration)
+				expirationTime = time.Now().Add(time.Duration(expDelta * int(time.Millisecond)))
+			}
+			storeMutex.Lock()
+			store[key] = Value{value, expirationTime}
+			storeMutex.Unlock()
+
+			conn.Write([]byte(buildRESPSimpleString(RESPONSE_OK)))
+		case "TYPE":
+			var response string
+			key := respRequest[1]
+			storeMutex.RLock()
+			value, exists := store[key]
+			if !exists {
+				response = RESPONSE_NONE
+			} else {
+				response = reflect.TypeOf(value.value).String()
+			}
+			storeMutex.RUnlock()
+
+			conn.Write([]byte(buildRESPSimpleString(response)))
+			
+		default:
+			conn.Write([]byte("-ERR unknown command\r\n"))
 		}
+
 	}
 }
