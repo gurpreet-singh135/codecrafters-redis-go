@@ -6,7 +6,6 @@ import (
 	"log"
 	"net"
 	"os"
-	"reflect"
 	"strconv"
 	"strings"
 	"sync"
@@ -14,7 +13,7 @@ import (
 )
 
 const (
-	CLRF = "\r\n"
+	CRLF = "\r\n"
 	RESPONSE_OK = "OK"
 	RESPONSE_NONE = "none"
 )
@@ -28,9 +27,55 @@ type Value struct {
 	expiration time.Time
 }
 
+type RedisValue interface {
+	Type() string
+	IsExpired(currentTime time.Time) bool
+}
+
+type StringValue struct {
+	val string
+	expiration time.Time
+}
+
+func (s StringValue) Type() string {
+	return "string"
+}
+
+func (s StringValue) IsExpired(currentTime time.Time) bool {
+	return !s.expiration.IsZero() && currentTime.Compare(s.expiration) >= 0
+}
+
+type StreamEntry struct {
+	ID string
+	Fields map[string]string	
+}
+
+type StreamValue struct {
+	entries []StreamEntry
+}
+
+func (entry StreamValue) IsExpired(currentTime time.Time) bool {
+	return false
+}
+
+func (entry StreamValue) Type() string {
+	return "stream" 
+} 
+
+type Cache struct {
+	data map[string]RedisValue
+	mu sync.RWMutex
+}
+
+func NewCache() *Cache {
+    return &Cache{
+        data: make(map[string]RedisValue),
+    }
+}
+
+
 var (
-	store = make(map[string]Value)
-	storeMutex sync.RWMutex
+	store = NewCache()
 )
 
 
@@ -56,17 +101,17 @@ func main() {
 
 func buildRESPBulkString(s string) string {
 	if s == "" {
-		return "$" + "-1" + CLRF
+		return "$" + "-1" + CRLF
 	}
 	s = strings.TrimSpace(s)
 	strLen := len(s)
-	RESPString := "$" + strconv.Itoa(strLen) + CLRF + s + CLRF;
+	RESPString := "$" + strconv.Itoa(strLen) + CRLF + s + CRLF
 	return RESPString
 }
 
 func buildRESPSimpleString(s string) string {
 	s = strings.TrimSpace(s)
-	RESPString := "+" + s + CLRF;
+	RESPString := "+" + s + CRLF;
 	return RESPString	
 }
 
@@ -85,7 +130,7 @@ func parseRESPRequest(reader *bufio.Reader) []string {
 
 	lines, err := strconv.Atoi(numOfLine[1:])
 	if err != nil {
-    log.Printf("Error converting to int: %v, input was: %q", err, numOfLine[1:])
+  	log.Printf("Error converting to int: %v, input was: %q", err, numOfLine[1:])
 		return RESP_ZERO_REQUEST
 	}
 
@@ -122,7 +167,6 @@ func handleConnection(conn net.Conn) {
 	reader := bufio.NewReader(conn)
 	
 	for {
-		// currentTime := time.Now()
 		respRequest = parseRESPRequest(reader)
 		log.Println("RESP Request, ", respRequest)
 
@@ -137,40 +181,45 @@ func handleConnection(conn net.Conn) {
 		switch command {
 		case "PING":
 			conn.Write([]byte("+PONG\r\n"))
+
 		case "ECHO":
 			echoStr := respRequest[1]
 			conn.Write([]byte(buildRESPBulkString(echoStr)))
+
 		case "GET":
+		  currentTime := time.Now()
 			log.Println("GET command is executed")
 			key := respRequest[1]
 			var response string
 
-			storeMutex.RLock()	
-			value, ok := store[key]
-			if ok {
-				needsDelete := isValueExpired(value, time.Now()) 
-				storeMutex.RUnlock()
-
-				if needsDelete {
-					storeMutex.Lock()
-					if value2, exists := store[key]; exists && isValueExpired(value2, time.Now()) {
-						delete(store, key)
-						// response remains empty string for expired key
-
-					} else {
-						response = value2.value
+			store.mu.RLock()	
+			value, exists := store.data[key]
+			if exists && value.IsExpired(currentTime) {
+				log.Println("Key exists, but might have expired")
+				store.mu.RUnlock()
+				store.mu.Lock()
+				log.Println("Key exists, but has expired")
+				if val2, stillExists := store.data[key]; stillExists {
+					if val2.IsExpired(currentTime) {
+						delete(store.data, key)
+					} else if sv, ok := val2.(StringValue); ok {
+						response = sv.val
 					}
-					// If !exists, key was deleted by another goroutine - response stays empty
-					storeMutex.Unlock()
-				} else {
-					response = value.value
+				store.mu.Unlock()
 				}
+			} else if exists {
+				log.Println("Key exists, but didn't expired")
+				if sv, ok := value.(StringValue); ok {
+					response = sv.val
+				}
+				store.mu.RUnlock()
 			} else {
-				storeMutex.Unlock()
-				// response remains empty string for non-existent key
+				log.Println("Key does not exists")
+				// key doesn't exist
+				store.mu.RUnlock()
 			}
-			log.Println("GET: key and value are: ", key, value)
 			conn.Write([]byte(buildRESPBulkString(response)))
+
 		case "SET":
 			key := respRequest[1]
 			value := respRequest[2]
@@ -179,27 +228,54 @@ func handleConnection(conn net.Conn) {
 				// we have to parse expiration as well
 				expirationDuration := respRequest[4]
 				expDelta, _ := strconv.Atoi(expirationDuration)
-				expirationTime = time.Now().Add(time.Duration(expDelta * int(time.Millisecond)))
+				expirationTime = time.Now().Add(time.Duration(expDelta) * time.Millisecond)
 			}
-			storeMutex.Lock()
-			store[key] = Value{value, expirationTime}
-			storeMutex.Unlock()
+			store.mu.Lock()
+			store.data[key] = StringValue{value, expirationTime}
+			store.mu.Unlock()
 
 			conn.Write([]byte(buildRESPSimpleString(RESPONSE_OK)))
+
 		case "TYPE":
 			var response string
 			key := respRequest[1]
-			storeMutex.RLock()
-			value, exists := store[key]
+			store.mu.RLock()
+			value, exists := store.data[key]
 			if !exists {
 				response = RESPONSE_NONE
 			} else {
-				response = reflect.TypeOf(value.value).String()
+				response = value.Type() 
 			}
-			storeMutex.RUnlock()
-
+			store.mu.RUnlock()
 			conn.Write([]byte(buildRESPSimpleString(response)))
-			
+
+		case "XADD":
+			streamKey := respRequest[1]
+			streamID := respRequest[2]
+			streamFields := map[string]string{}
+
+			for i := 3; i < len(respRequest); i += 2 {
+				key := respRequest[i]
+				value := respRequest[i + 1]
+				streamFields[key] = value
+			}
+
+			streamEntry := StreamEntry{streamID, streamFields}
+
+			store.mu.Lock()
+			existingEntries, exists := store.data[streamKey]
+			if se, ok := existingEntries.(StreamValue); exists {
+				if ok {
+					se.entries = append(se.entries, streamEntry)
+				} else {
+					log.Fatal("duplicate key with stream and other type")
+				}
+			} else {
+				store.data[streamKey] = StreamValue{[]StreamEntry{streamEntry}}
+			}
+			store.mu.Unlock()
+			conn.Write([]byte(buildRESPBulkString(streamID)))
+
 		default:
 			conn.Write([]byte("-ERR unknown command\r\n"))
 		}
