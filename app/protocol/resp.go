@@ -1,0 +1,72 @@
+package protocol
+
+import (
+	"bufio"
+	"log"
+	"strconv"
+	"strings"
+)
+
+// ParseRequest parses a RESP array request from the reader
+func ParseRequest(reader *bufio.Reader) ([]string, error) {
+	respRequest := []string{}
+	numOfLine, err := reader.ReadString('\n')
+	if err != nil {
+		return RESP_ZERO_REQUEST, err
+	}
+	
+	numOfLine = strings.TrimSpace(numOfLine)
+	log.Println("numOfLine is: ", numOfLine)
+	
+	// RESP format check
+	if !strings.HasPrefix(numOfLine, "*") {
+		log.Println("invalid RESP command")
+		return RESP_ZERO_REQUEST, nil
+	}
+
+	lines, err := strconv.Atoi(numOfLine[1:])
+	if err != nil {
+		log.Printf("Error converting to int: %v, input was: %q", err, numOfLine[1:])
+		return RESP_ZERO_REQUEST, err
+	}
+
+	for i := 0; i < lines; i++ {
+		// Read bulk string length line
+		_, err := reader.ReadString('\n')
+		if err != nil {
+			return RESP_ZERO_REQUEST, err
+		}
+
+		// Read bulk string data
+		command, err := reader.ReadString('\n')
+		if err != nil {
+			return RESP_ZERO_REQUEST, err
+		}
+		
+		command = strings.TrimSpace(command)
+		respRequest = append(respRequest, command)
+	}
+
+	return respRequest, nil
+}
+
+// BuildBulkString creates a RESP bulk string
+func BuildBulkString(s string) string {
+	if s == "" {
+		return "$-1" + CRLF
+	}
+	s = strings.TrimSpace(s)
+	strLen := len(s)
+	return "$" + strconv.Itoa(strLen) + CRLF + s + CRLF
+}
+
+// BuildSimpleString creates a RESP simple string
+func BuildSimpleString(s string) string {
+	s = strings.TrimSpace(s)
+	return "+" + s + CRLF
+}
+
+// BuildError creates a RESP error message
+func BuildError(msg string) string {
+	return "-ERR " + msg + CRLF
+}
