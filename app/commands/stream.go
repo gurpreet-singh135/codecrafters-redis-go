@@ -31,15 +31,17 @@ func (c *XAddCommand) Execute(args []string, cache storage.Cache) string {
 		ID:     streamID,
 		Fields: streamFields,
 	}
+
+	
 	
 	// Use thread-safe atomic operation to add entry to stream
-	err := cache.AddToStream(streamKey, &streamEntry)
+	newEntryID, err := cache.AddToStream(streamKey, &streamEntry)
 	if err != nil {
 		log.Printf("Error adding to stream %s: %v", streamKey, err)
 		return protocol.BuildError(err.Error())
 	}
 	
-	return protocol.BuildBulkString(streamID)
+	return protocol.BuildBulkString(newEntryID)
 }
 
 func (c *XAddCommand) Validate(args []string) error {
@@ -52,8 +54,18 @@ func (c *XAddCommand) Validate(args []string) error {
 		return errors.New("wrong number of arguments for 'xadd' command")
 	}
 
-	// validate entry ID
-	entryId := args[2]
+	
+
+	err := IsGreaterThanIdentityId(args[2])
+	if err != nil {
+		return errors.New(protocol.INVALID_MIN_ID)
+	}
+
+	return nil
+}
+
+func IsGreaterThanIdentityId(entryId string) error {
+	// validate entry ID format and minimum ID constraint
 	parts := strings.Split(entryId, "-")
 	if len(parts) != 2 {
 		return errors.New("invalid entry ID")
@@ -63,27 +75,25 @@ func (c *XAddCommand) Validate(args []string) error {
 		return errors.New("invalid entry ID (millisecondTime is not a number)")
 	}
 
+	if parts[1] == "*" {
+		if millisecondsTime >= 0 {
+			return nil
+		} 	
+		return errors.New("invalid entry ID") 
+	}
 	sequenceNumber, err := strconv.ParseInt(parts[1], 10, 64)
+
 	if err != nil {
 		return errors.New("invalid entry ID (sequenceNumber is not a number)")
 	}
 
-	valid := IsGreaterThanIdentityId(millisecondsTime, sequenceNumber)
-	if !valid {
-		return errors.New(protocol.INVALID_MIN_ID)
-	}
 
-	return nil
-}
-
-
-func IsGreaterThanIdentityId(millisecondsTime int64, sequenceNumber int64) bool {
 	if millisecondsTime <= 0 {
 		if millisecondsTime == 0 && sequenceNumber > 0 {
-			return true
+			return nil 
 		}
-		return false
+		return errors.New("Invalid Entry ID") 
 	}
-	return true
+	return nil 
 }
 

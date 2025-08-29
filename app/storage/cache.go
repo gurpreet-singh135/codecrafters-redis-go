@@ -2,10 +2,10 @@ package storage
 
 import (
 	"errors"
-	"strconv"
-	"strings"
+	"log"
 	"sync"
 	"time"
+
 	"github.com/codecrafters-io/redis-starter-go/app/protocol"
 )
 
@@ -17,7 +17,7 @@ type Cache interface {
 	Type(key string) string
 	CleanupExpired()
 	// Thread-safe stream operations
-	AddToStream(key string, entry *StreamEntry) error
+	AddToStream(key string, entry *StreamEntry) (string, error)
 }
 
 // InMemoryCache implements Cache interface with thread-safe operations
@@ -113,59 +113,36 @@ func (c *InMemoryCache) CleanupExpired() {
 
 
 // AddToStream atomically adds an entry to a stream
-func (c *InMemoryCache) AddToStream(key string, entry *StreamEntry) error {
+func (c *InMemoryCache) AddToStream(key string, entry *StreamEntry) (string, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	
 	value, exists := c.data[key]
+	var newEntryID string
+	var err error
 	if exists {
 		// Check if it's actually a stream
 		if streamVal, ok := value.(*StreamValue); ok {
-			// Create a new StreamValue with the added entry
-			lastStreamEntry := streamVal.Entries[len(streamVal.Entries) - 1]
-
-			err := IsValidEntryId(entry.ID, lastStreamEntry.ID)
+			// Validate the new entry ID using the stream's validation method
+			newEntryID, err = streamVal.AddEntry(entry)
 			if err != nil {
-				return errors.New(protocol.INVALID_ENTRY_ID)
+				return protocol.EMPTY_STRING, errors.New(protocol.INVALID_ENTRY_ID)
 			}
-			streamVal.Entries = append(streamVal.Entries, *entry)
-
-			// newEntries := make([]StreamEntry, len(streamVal.Entries)+1)
-			// copy(newEntries, streamVal.Entries)
-			// newEntries[len(streamVal.Entries)] = *entry
 		} else {
-			return errors.New("WRONGTYPE Operation against a key holding the wrong kind of value")
+			return protocol.EMPTY_STRING, errors.New("WRONGTYPE Operation against a key holding the wrong kind of value")
 		}
 	} else {
 		// Create new stream
-		c.data[key] = &StreamValue{Entries: []StreamEntry{*entry}}
+		log.Println("I'm inside the case where there is no entry for the streamKey")
+		streamVal := StreamValue{Entries: []StreamEntry{}}
+		c.data[key] = &streamVal
+		newEntryID, err = streamVal.AddEntry(entry)
+		if err != nil {
+			return protocol.EMPTY_STRING, errors.New(protocol.INVALID_ENTRY_ID)
+		}
 	}
+
+	log.Println("value of the inserted entryId is: ", newEntryID)
 	
-	return nil
-}
-
-func IsValidEntryId(entryId string, lastEntryId string) (error) {
-	parts := strings.Split(entryId, "-")
-	lastParts := strings.Split(lastEntryId, "-")
-
-	if len(parts) != 2 {
-		return errors.New("invalid entry ID")
-	}
-	millisecondsTime, err := strconv.ParseInt(parts[0], 10, 64)
-	lastMillisecondsTime, _ := strconv.ParseInt(lastParts[0], 10, 64)
-	if err != nil {
-		return errors.New("invalid entry ID (millisecondTime is not a number)")
-	}
-
-	sequenceNumber, err := strconv.ParseInt(parts[1], 10, 64)
-	lastSequenceNumber, _ := strconv.ParseInt(lastParts[1], 10, 64)
-	if err != nil {
-		return errors.New("invalid entry ID (sequenceNumber is not a number)")
-	}
-
-	if (millisecondsTime > lastMillisecondsTime) || ((millisecondsTime == lastMillisecondsTime) && (sequenceNumber > lastSequenceNumber)) {
-		return nil
-	}
-
-	return errors.New("invalid entry ID")
+	return newEntryID, nil
 }
