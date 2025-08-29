@@ -2,7 +2,6 @@ package storage
 
 import (
 	"errors"
-	"log"
 	"strconv"
 	"strings"
 	"time"
