@@ -54,8 +54,6 @@ func (c *XAddCommand) Validate(args []string) error {
 		return errors.New("wrong number of arguments for 'xadd' command")
 	}
 
-	
-
 	err := IsGreaterThanIdentityId(args[2])
 	if err != nil {
 		return errors.New(protocol.INVALID_MIN_ID)
@@ -65,6 +63,9 @@ func (c *XAddCommand) Validate(args []string) error {
 }
 
 func IsGreaterThanIdentityId(entryId string) error {
+	if entryId == "*" {
+		return nil
+	}
 	// validate entry ID format and minimum ID constraint
 	parts := strings.Split(entryId, "-")
 	if len(parts) != 2 {
@@ -92,7 +93,7 @@ func IsGreaterThanIdentityId(entryId string) error {
 		if millisecondsTime == 0 && sequenceNumber > 0 {
 			return nil 
 		}
-		return errors.New("Invalid Entry ID") 
+		return errors.New("invalid entry ID") 
 	}
 	return nil 
 }

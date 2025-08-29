@@ -2,6 +2,7 @@ package storage
 
 import (
 	"errors"
+	"log"
 	"strconv"
 	"strings"
 	"time"
@@ -78,11 +79,17 @@ func (s *StreamValue) AddEntry(entry *StreamEntry) (string, error) {
 // IsValidNewEntryID validates that a new entry ID is greater than the last entry ID
 func (s *StreamValue) IsValidNewEntryID(newEntryID string) (string, error) {
 	var lastEntryID string
+
 	if len(s.Entries) == 0 {
 		lastEntryID = "0-0"
 	} else {
 		lastEntryID = s.Entries[len(s.Entries)-1].ID
 	}
+	if newEntryID == "*" {
+		unixTime := time.Now().UnixMilli()
+		newEntryID = strconv.FormatInt(unixTime, 10) + "-*"
+	}
+
 	return ValidateEntryIDOrder(newEntryID, lastEntryID)
 }
 
@@ -124,7 +131,7 @@ func ValidateEntryIDOrder(entryID, lastEntryID string) (string, error) {
 
 
 	if (millisecondsTime > lastMillisecondsTime) || ((millisecondsTime == lastMillisecondsTime) && (sequenceNumber > lastSequenceNumber)) {
-		return strconv.Itoa(int(millisecondsTime)) + "-" + strconv.Itoa(int(sequenceNumber)), nil
+		return strconv.FormatInt(millisecondsTime, 10)+ "-" + strconv.FormatInt(sequenceNumber, 10), nil
 	}
 
 	return protocol.EMPTY_STRING, errors.New("invalid entry ID")
