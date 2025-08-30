@@ -118,7 +118,7 @@ func (c *InMemoryCache) AddToStream(key string, entry *StreamEntry) (string, err
 	defer c.mu.Unlock()
 	
 	value, exists := c.data[key]
-	var newEntryID string
+	var newEntryID *EntryID 
 	var err error
 	if exists {
 		// Check if it's actually a stream
@@ -144,5 +144,5 @@ func (c *InMemoryCache) AddToStream(key string, entry *StreamEntry) (string, err
 
 	log.Println("value of the inserted entryId is: ", newEntryID)
 	
-	return newEntryID, nil
+	return newEntryID.GetEntryID(), nil
 }

@@ -15,7 +15,7 @@ type XAddCommand struct{}
 
 func (c *XAddCommand) Execute(args []string, cache storage.Cache) string {
 	streamKey := args[1]
-	streamID := args[2]
+	streamEntryID := args[2]
 
 	// Parse field-value pairs
 	streamFields := make(map[string]string)
@@ -28,7 +28,7 @@ func (c *XAddCommand) Execute(args []string, cache storage.Cache) string {
 	}
 	
 	streamEntry := storage.StreamEntry{
-		ID:     streamID,
+		ID:     *storage.NewEntryID(streamEntryID),
 		Fields: streamFields,
 	}
 

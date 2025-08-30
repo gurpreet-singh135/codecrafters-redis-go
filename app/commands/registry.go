@@ -31,6 +31,7 @@ func NewCommandRegistry() *CommandRegistry {
 	registry.Register("SET", &SetCommand{})
 	registry.Register("TYPE", &TypeCommand{})
 	registry.Register("XADD", &XAddCommand{})
+	registry.Register("XRANGE", &XRangeCommand{})
 	
 	return registry
 }

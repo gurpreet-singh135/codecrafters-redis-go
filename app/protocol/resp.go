@@ -70,3 +70,35 @@ func BuildSimpleString(s string) string {
 func BuildError(msg string) string {
 	return "-ERR " + msg + CRLF
 }
+
+// BuildEmptyArray
+func BuildEmptyArray() string {
+		return "*0" + CRLF
+}
+
+// Build RESP Array
+func BuildArray(entries []any) string {
+	length := len(entries)
+
+	if length == 0 {
+		return BuildEmptyArray()
+	}
+
+	resp := ""
+	resp += "*" + strconv.Itoa(length) + CRLF
+
+	for _, entry := range entries {
+		switch v := entry.(type) {
+		case []any:
+			res := BuildArray(v)
+			resp += res
+		case string:
+			length := len(v)
+			resp += "$" + strconv.Itoa(length) + CRLF
+			res := v + CRLF 
+			resp += res
+		}
+	}
+
+	return resp
+}
