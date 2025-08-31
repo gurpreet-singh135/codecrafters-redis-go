@@ -32,6 +32,7 @@ func NewCommandRegistry() *CommandRegistry {
 	registry.Register("TYPE", &TypeCommand{})
 	registry.Register("XADD", &XAddCommand{})
 	registry.Register("XRANGE", &XRangeCommand{})
+	registry.Register("XREAD", &XReadCommand{})
 	
 	return registry
 }

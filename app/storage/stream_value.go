@@ -48,7 +48,6 @@ func (e *EntryID) IsInRange(start, end *EntryID) bool {
 	return (e.IsGreater(start) || e.IsEqual(start)) && (e.IsSmaller(end) || e.IsEqual(end))
 }
 
-
 // StreamEntry represents a single entry in a Redis stream
 type StreamEntry struct {
 	ID    EntryID 
@@ -87,6 +86,19 @@ func (s *StreamValue) GetEntriesByRange(start, end *EntryID) []StreamEntry {
 	}
 
 	return entries
+}
+
+func (s *StreamValue) GetEntriesGreaterThan(start *EntryID) []StreamEntry {
+	var entries []StreamEntry
+
+	for _, entry := range s.Entries {
+		if entry.ID.IsGreater(start) {
+			entries = append(entries, entry)
+		}
+	}
+
+
+	return entries	
 }
 
 func (s *StreamValue) Type() string {
