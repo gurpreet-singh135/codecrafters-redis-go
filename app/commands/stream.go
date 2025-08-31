@@ -26,21 +26,19 @@ func (c *XAddCommand) Execute(args []string, cache storage.Cache) string {
 			streamFields[field] = value
 		}
 	}
-	
+
 	streamEntry := storage.StreamEntry{
 		ID:     *storage.NewEntryID(streamEntryID),
 		Fields: streamFields,
 	}
 
-	
-	
 	// Use thread-safe atomic operation to add entry to stream
 	newEntryID, err := cache.AddToStream(streamKey, &streamEntry)
 	if err != nil {
 		log.Printf("Error adding to stream %s: %v", streamKey, err)
 		return protocol.BuildError(err.Error())
 	}
-	
+
 	return protocol.BuildBulkString(newEntryID)
 }
 
@@ -48,7 +46,7 @@ func (c *XAddCommand) Validate(args []string) error {
 	if len(args) < 5 {
 		return errors.New("wrong number of arguments for 'xadd' command")
 	}
-	
+
 	// Check that we have pairs of field-value arguments
 	if (len(args)-3)%2 != 0 {
 		return errors.New("wrong number of arguments for 'xadd' command")
@@ -79,8 +77,8 @@ func IsGreaterThanIdentityId(entryId string) error {
 	if parts[1] == "*" {
 		if millisecondsTime >= 0 {
 			return nil
-		} 	
-		return errors.New("invalid entry ID") 
+		}
+		return errors.New("invalid entry ID")
 	}
 	sequenceNumber, err := strconv.ParseInt(parts[1], 10, 64)
 
@@ -88,13 +86,11 @@ func IsGreaterThanIdentityId(entryId string) error {
 		return errors.New("invalid entry ID (sequenceNumber is not a number)")
 	}
 
-
 	if millisecondsTime <= 0 {
 		if millisecondsTime == 0 && sequenceNumber > 0 {
-			return nil 
+			return nil
 		}
-		return errors.New("invalid entry ID") 
+		return errors.New("invalid entry ID")
 	}
-	return nil 
+	return nil
 }
-

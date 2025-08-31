@@ -14,10 +14,10 @@ func ParseRequest(reader *bufio.Reader) ([]string, error) {
 	if err != nil {
 		return RESP_ZERO_REQUEST, err
 	}
-	
+
 	numOfLine = strings.TrimSpace(numOfLine)
 	log.Println("numOfLine is: ", numOfLine)
-	
+
 	// RESP format check
 	if !strings.HasPrefix(numOfLine, "*") {
 		log.Println("invalid RESP command")
@@ -42,7 +42,7 @@ func ParseRequest(reader *bufio.Reader) ([]string, error) {
 		if err != nil {
 			return RESP_ZERO_REQUEST, err
 		}
-		
+
 		command = strings.TrimSpace(command)
 		respRequest = append(respRequest, command)
 	}
@@ -73,7 +73,11 @@ func BuildError(msg string) string {
 
 // BuildEmptyArray
 func BuildEmptyArray() string {
-		return "*0" + CRLF
+	return "*0" + CRLF
+}
+
+func BuildNullArray() string {
+	return "*-1" + CRLF
 }
 
 // Build RESP Array
@@ -81,7 +85,7 @@ func BuildArray(entries []any) string {
 	length := len(entries)
 
 	if length == 0 {
-		return BuildEmptyArray()
+		return BuildNullArray()
 	}
 
 	resp := ""
@@ -95,7 +99,7 @@ func BuildArray(entries []any) string {
 		case string:
 			length := len(v)
 			resp += "$" + strconv.Itoa(length) + CRLF
-			res := v + CRLF 
+			res := v + CRLF
 			resp += res
 		}
 	}

@@ -10,13 +10,13 @@ import (
 )
 
 type EntryID struct {
-	Milliseconds int64
+	Milliseconds   int64
 	SequenceNumber int64
-	StreamEntryID string
+	StreamEntryID  string
 }
 
 func NewEntryID(streamEntryID string) *EntryID {
-	return &EntryID{0, 0, streamEntryID} 
+	return &EntryID{0, 0, streamEntryID}
 }
 
 func (e *EntryID) ParseStreamEntryID() {
@@ -31,8 +31,8 @@ func (e *EntryID) GetEntryID() string {
 }
 
 func (e *EntryID) IsGreater(otherEntry *EntryID) bool {
-	return (e.Milliseconds > otherEntry.Milliseconds) || 
-						((e.Milliseconds == otherEntry.Milliseconds) && (e.SequenceNumber > otherEntry.SequenceNumber))
+	return (e.Milliseconds > otherEntry.Milliseconds) ||
+		((e.Milliseconds == otherEntry.Milliseconds) && (e.SequenceNumber > otherEntry.SequenceNumber))
 }
 
 func (e *EntryID) IsEqual(otherEntry *EntryID) bool {
@@ -40,8 +40,8 @@ func (e *EntryID) IsEqual(otherEntry *EntryID) bool {
 }
 
 func (e *EntryID) IsSmaller(otherEntry *EntryID) bool {
-	return (e.Milliseconds < otherEntry.Milliseconds) || 
-						((e.Milliseconds == otherEntry.Milliseconds) && (e.SequenceNumber < otherEntry.SequenceNumber)) 
+	return (e.Milliseconds < otherEntry.Milliseconds) ||
+		((e.Milliseconds == otherEntry.Milliseconds) && (e.SequenceNumber < otherEntry.SequenceNumber))
 }
 
 func (e *EntryID) IsInRange(start, end *EntryID) bool {
@@ -50,12 +50,12 @@ func (e *EntryID) IsInRange(start, end *EntryID) bool {
 
 // StreamEntry represents a single entry in a Redis stream
 type StreamEntry struct {
-	ID    EntryID 
+	ID     EntryID
 	Fields map[string]string
 }
 
 func (s *StreamEntry) ToArray() []any {
-	flattenedArray := make([]any, len(s.Fields) * 2)
+	flattenedArray := make([]any, len(s.Fields)*2)
 
 	i := 0
 	for key, value := range s.Fields {
@@ -67,7 +67,7 @@ func (s *StreamEntry) ToArray() []any {
 	return []any{
 		s.ID.GetEntryID(),
 		flattenedArray,
-	} 
+	}
 }
 
 // StreamValue represents a Redis stream value
@@ -97,8 +97,7 @@ func (s *StreamValue) GetEntriesGreaterThan(start *EntryID) []StreamEntry {
 		}
 	}
 
-
-	return entries	
+	return entries
 }
 
 func (s *StreamValue) Type() string {
@@ -122,7 +121,7 @@ func (s *StreamValue) GetEntries() []StreamEntry {
 // 		return nil, false
 // 	}
 
-// 	return &val, true 
+// 	return &val, true
 // }
 
 // AddEntry adds a new entry to the stream
@@ -176,7 +175,7 @@ func ValidateEntryIDOrder(entryID, lastEntryID string) (*EntryID, error) {
 		if millisecondsTime == lastMillisecondsTime {
 			sequenceNumber = lastSequenceNumber + 1
 		} else if millisecondsTime < lastMillisecondsTime {
-			return NewEntryID(""), errors.New("invalid entry ID") 
+			return NewEntryID(""), errors.New("invalid entry ID")
 		} else {
 			sequenceNumber = 0
 			if millisecondsTime == 0 {
@@ -190,10 +189,9 @@ func ValidateEntryIDOrder(entryID, lastEntryID string) (*EntryID, error) {
 		}
 	}
 
-
 	if (millisecondsTime > lastMillisecondsTime) || ((millisecondsTime == lastMillisecondsTime) && (sequenceNumber > lastSequenceNumber)) {
 		// return strconv.FormatInt(millisecondsTime, 10)+ "-" + strconv.FormatInt(sequenceNumber, 10), nil
-		streamEntryId := strconv.FormatInt(millisecondsTime, 10)+ "-" + strconv.FormatInt(sequenceNumber, 10)
+		streamEntryId := strconv.FormatInt(millisecondsTime, 10) + "-" + strconv.FormatInt(sequenceNumber, 10)
 
 		entry := EntryID{millisecondsTime, sequenceNumber, streamEntryId}
 		return &entry, nil

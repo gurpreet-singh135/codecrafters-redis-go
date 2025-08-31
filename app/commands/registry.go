@@ -1,6 +1,7 @@
 package commands
 
 import (
+	"log"
 	"strings"
 
 	"github.com/codecrafters-io/redis-starter-go/app/protocol"
@@ -23,7 +24,7 @@ func NewCommandRegistry() *CommandRegistry {
 	registry := &CommandRegistry{
 		commands: make(map[string]Command),
 	}
-	
+
 	// Register all commands
 	registry.Register("PING", &PingCommand{})
 	registry.Register("ECHO", &EchoCommand{})
@@ -33,7 +34,7 @@ func NewCommandRegistry() *CommandRegistry {
 	registry.Register("XADD", &XAddCommand{})
 	registry.Register("XRANGE", &XRangeCommand{})
 	registry.Register("XREAD", &XReadCommand{})
-	
+
 	return registry
 }
 
@@ -48,11 +49,12 @@ func (r *CommandRegistry) Execute(cmdName string, args []string, cache storage.C
 	if !exists {
 		return protocol.BuildError("unknown command '" + cmdName + "'")
 	}
-	
+
 	if err := cmd.Validate(args); err != nil {
 		return protocol.BuildError(err.Error())
 	}
-	
+
+	log.Printf("Values of cmd, and args are %s, %v", cmdName, args)
 	return cmd.Execute(args, cache)
 }
 

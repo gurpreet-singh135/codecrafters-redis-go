@@ -10,21 +10,17 @@ import (
 	"github.com/codecrafters-io/redis-starter-go/app/storage"
 )
 
-
-type XRangeCommand struct {}
-
+type XRangeCommand struct{}
 
 func (c *XRangeCommand) Execute(args []string, cache storage.Cache) string {
 	var startEntryID, endEntryID storage.EntryID
 
 	err := c.Validate(args)
 	if err != nil {
-		return protocol.BuildError(err.Error()) 
+		return protocol.BuildError(err.Error())
 	}
 
 	key := args[1]
-
-
 
 	// if args[2] == "-" {
 	// 	startEntryId.Milliseconds = 0
@@ -38,14 +34,14 @@ func (c *XRangeCommand) Execute(args []string, cache storage.Cache) string {
 	// 		startEntryId.Milliseconds, _ = strconv.ParseInt(sParts[0], 10, 64)
 	// 		startEntryId.SequenceNumber, _ = strconv.ParseInt(sParts[1], 10, 64)
 	// 	}
-	// } 
+	// }
 
 	startEntryID = *ParseStreamEntryID(args[2])
 	endEntryID = *ParseStreamEntryID(args[3])
 
 	// if args[3] == "+" {
 	// 	endEntryID.Milliseconds = math.MaxInt64
-  //   endEntryID.SequenceNumber = math.MaxInt64
+	//   endEntryID.SequenceNumber = math.MaxInt64
 	// } else {
 	// 	eParts := strings.Split(args[3], "-")
 	// 	if len(eParts) == 1 {
@@ -61,19 +57,16 @@ func (c *XRangeCommand) Execute(args []string, cache storage.Cache) string {
 		endEntryID.SequenceNumber = math.MaxInt64
 	}
 
-	
-
-
 	streamValue, exists := cache.Get(key)
 	if !exists {
 		return protocol.BuildEmptyArray()
 	}
-	
+
 	inRangeEntries := streamValue.(*storage.StreamValue).GetEntriesByRange(&startEntryID, &endEntryID)
 	var entries []any
 	for _, entry := range inRangeEntries {
 		entries = append(entries, entry.ToArray())
-	} 
+	}
 
 	return protocol.BuildArray(entries)
 }
@@ -82,7 +75,7 @@ func (c *XRangeCommand) Validate(args []string) error {
 	if len(args) != 4 {
 		return errors.New("wrong number of arguments for 'XRANGE' command")
 	}
-	
+
 	return nil
 }
 

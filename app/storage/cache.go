@@ -41,7 +41,7 @@ func (c *InMemoryCache) Get(key string) (RedisValue, bool) {
 		c.mu.RUnlock()
 		return nil, false
 	}
-	
+
 	// Check if expired
 	if value.IsExpired(time.Now()) {
 		c.mu.RUnlock()
@@ -61,7 +61,7 @@ func (c *InMemoryCache) Get(key string) (RedisValue, bool) {
 		c.mu.Unlock()
 		return value, false
 	}
-	
+
 	c.mu.RUnlock()
 	return value, true
 }
@@ -84,17 +84,17 @@ func (c *InMemoryCache) Delete(key string) {
 func (c *InMemoryCache) Type(key string) string {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
-	
+
 	value, exists := c.data[key]
 	if !exists {
 		return "none"
 	}
-	
+
 	// Check if expired
 	if value.IsExpired(time.Now()) {
 		return "none"
 	}
-	
+
 	return value.Type()
 }
 
@@ -103,7 +103,7 @@ func (c *InMemoryCache) CleanupExpired() {
 	currentTime := time.Now()
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	
+
 	for key, value := range c.data {
 		if value.IsExpired(currentTime) {
 			delete(c.data, key)
@@ -111,14 +111,13 @@ func (c *InMemoryCache) CleanupExpired() {
 	}
 }
 
-
 // AddToStream atomically adds an entry to a stream
 func (c *InMemoryCache) AddToStream(key string, entry *StreamEntry) (string, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	
+
 	value, exists := c.data[key]
-	var newEntryID *EntryID 
+	var newEntryID *EntryID
 	var err error
 	if exists {
 		// Check if it's actually a stream
@@ -143,6 +142,6 @@ func (c *InMemoryCache) AddToStream(key string, entry *StreamEntry) (string, err
 	}
 
 	log.Println("value of the inserted entryId is: ", newEntryID)
-	
+
 	return newEntryID.GetEntryID(), nil
 }
