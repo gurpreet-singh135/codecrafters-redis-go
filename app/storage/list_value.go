@@ -36,6 +36,12 @@ func (l *ListValue) Prepend(listEntry *ListItem) int {
 	return l.Size()
 }
 
+func (l *ListValue) Lpop() *ListItem {
+	item := l.Items[0]
+	l.Items = l.Items[1:]
+	return &item
+}
+
 func (l *ListValue) GetRangeInclusive(start, end int) []ListItem {
 	result := make([]ListItem, 0)
 	if start < 0 {

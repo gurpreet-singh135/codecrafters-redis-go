@@ -38,6 +38,7 @@ func NewCommandRegistry() *CommandRegistry {
 	registry.Register("LRANGE", &LRangeCommand{})
 	registry.Register("LPUSH", &LPushCommand{})
 	registry.Register("LLEN", &LLenCommand{})
+	registry.Register("LPOP", &LPopCommand{})
 
 	return registry
 }
