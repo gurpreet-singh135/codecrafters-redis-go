@@ -1,11 +1,13 @@
 package storage
 
 import (
+	"sync"
 	"time"
 )
 
 type ListValue struct {
 	Items []ListItem
+	mu    sync.RWMutex
 }
 
 type ListItem struct {
@@ -27,22 +29,33 @@ func (l *ListValue) Size() int {
 }
 
 func (l *ListValue) Append(listEntry *ListItem) int {
+	l.mu.Lock()
+	defer l.mu.Unlock()
 	l.Items = append(l.Items, *listEntry)
 	return l.Size()
 }
 
 func (l *ListValue) Prepend(listEntry *ListItem) int {
+	l.mu.Lock()
+	defer l.mu.Unlock()
 	l.Items = append([]ListItem{*listEntry}, l.Items...)
 	return l.Size()
 }
 
 func (l *ListValue) Lpop() *ListItem {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if l.Size() == 0 {
+		return nil
+	}
 	item := l.Items[0]
 	l.Items = l.Items[1:]
 	return &item
 }
 
 func (l *ListValue) GetRangeInclusive(start, end int) []ListItem {
+	l.mu.RLock()
+	defer l.mu.RUnlock()
 	result := make([]ListItem, 0)
 	if start < 0 {
 		if -start > l.Size() {
