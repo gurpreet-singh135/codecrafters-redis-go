@@ -25,8 +25,15 @@ func waitForNewData(cache storage.Cache, keys, ids []string) {
 				if !exists {
 					continue
 				}
-				entityId := ParseStreamEntryID(ids[i])
-				newLen := len(redisValueForKey.(*storage.StreamValue).GetEntriesGreaterThan(entityId))
+				var entityId storage.EntryID
+				if ids[i] == "$" {
+					entries := redisValueForKey.(*storage.StreamValue).Entries
+					lastEntry := entries[len(entries)-1]
+					entityId = lastEntry.ID
+				} else {
+					entityId = *ParseStreamEntryID(ids[i])
+				}
+				newLen := len(redisValueForKey.(*storage.StreamValue).GetEntriesGreaterThan(&entityId))
 				if newLen > 0 {
 					newDataChan <- true
 					return
