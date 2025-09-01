@@ -76,8 +76,14 @@ func BuildEmptyArray() string {
 	return "*0" + CRLF
 }
 
+// Build Null Array
 func BuildNullArray() string {
 	return "*-1" + CRLF
+}
+
+// Build Integer Response
+func BuildInteger(s string) string {
+	return ":" + s + CRLF
 }
 
 // Build RESP Array
