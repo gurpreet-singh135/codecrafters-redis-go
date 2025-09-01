@@ -35,6 +35,7 @@ func NewCommandRegistry() *CommandRegistry {
 	registry.Register("XRANGE", &XRangeCommand{})
 	registry.Register("XREAD", &XReadCommand{})
 	registry.Register("RPUSH", &RPushCommand{})
+	registry.Register("LRANGE", &LRangeCommand{})
 
 	return registry
 }

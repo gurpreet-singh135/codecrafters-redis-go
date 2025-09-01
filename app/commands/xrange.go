@@ -22,36 +22,8 @@ func (c *XRangeCommand) Execute(args []string, cache storage.Cache) string {
 
 	key := args[1]
 
-	// if args[2] == "-" {
-	// 	startEntryId.Milliseconds = 0
-	// 	startEntryId.SequenceNumber = 1
-	// } else {
-	// 	sParts := strings.Split(args[2], "-")
-	// 	if len(sParts) == 1 {
-	// 		startEntryId.Milliseconds, _ = strconv.ParseInt(sParts[0], 10, 64)
-	// 		startEntryId.SequenceNumber = 0
-	// 	} else {
-	// 		startEntryId.Milliseconds, _ = strconv.ParseInt(sParts[0], 10, 64)
-	// 		startEntryId.SequenceNumber, _ = strconv.ParseInt(sParts[1], 10, 64)
-	// 	}
-	// }
-
 	startEntryID = *ParseStreamEntryID(args[2])
 	endEntryID = *ParseStreamEntryID(args[3])
-
-	// if args[3] == "+" {
-	// 	endEntryID.Milliseconds = math.MaxInt64
-	//   endEntryID.SequenceNumber = math.MaxInt64
-	// } else {
-	// 	eParts := strings.Split(args[3], "-")
-	// 	if len(eParts) == 1 {
-	// 		endEntryID.Milliseconds, _ = strconv.ParseInt(eParts[0], 10, 64)
-	// 		endEntryID.SequenceNumber = math.MaxInt64
-	// 	} else {
-	// 		endEntryID.Milliseconds, _ = strconv.ParseInt(eParts[0], 10, 64)
-	// 		endEntryID.SequenceNumber, _ = strconv.ParseInt(eParts[1], 10, 64)
-	// 	}
-	// }
 
 	if !strings.Contains(args[3], "-") {
 		endEntryID.SequenceNumber = math.MaxInt64
