@@ -31,6 +31,13 @@ func (l *ListValue) Append(listEntry *ListItem) int {
 
 func (l *ListValue) GetRangeInclusive(start, end int) []ListItem {
 	result := make([]ListItem, 0)
+	if start < 0 {
+		start = l.Size() + start
+	}
+	if end < 0 {
+		end = l.Size() + end
+	}
+
 	if start > end || start >= l.Size() {
 		return result
 	} else if end > l.Size() {
