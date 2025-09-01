@@ -48,7 +48,7 @@ func (b *BLPopCommand) Execute(args []string, cache storage.Cache) string {
 
 	redisValue, exists = cache.Get(key)
 	if !exists {
-		return protocol.BuildBulkString("")
+		return protocol.BuildNullArray()
 	}
 	listValue, correctType := redisValue.(*storage.ListValue)
 	if !correctType {
@@ -58,7 +58,7 @@ func (b *BLPopCommand) Execute(args []string, cache storage.Cache) string {
 	if val := listValue.Lpop(); val != nil {
 		return protocol.BuildArray([]any{key, val.Value})
 	} else {
-		return protocol.BuildBulkString("")
+		return protocol.BuildNullArray()
 	}
 }
 
