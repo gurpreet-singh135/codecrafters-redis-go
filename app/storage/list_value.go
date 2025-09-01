@@ -28,7 +28,12 @@ func (l *ListValue) Size() int {
 
 func (l *ListValue) Append(listEntry *ListItem) int {
 	l.Items = append(l.Items, *listEntry)
-	return len(l.Items)
+	return l.Size()
+}
+
+func (l *ListValue) Prepend(listEntry *ListItem) int {
+	l.Items = append([]ListItem{*listEntry}, l.Items...)
+	return l.Size()
 }
 
 func (l *ListValue) GetRangeInclusive(start, end int) []ListItem {
