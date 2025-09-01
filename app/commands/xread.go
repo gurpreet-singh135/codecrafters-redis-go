@@ -2,7 +2,6 @@ package commands
 
 import (
 	"errors"
-	"fmt"
 	"log"
 	"strconv"
 	"strings"
@@ -14,18 +13,53 @@ import (
 
 type XReadCommand struct{}
 
-// Execute implements Command.
-func (x *XReadCommand) Execute(args []string, cache storage.Cache) string {
-	log.Println("value of args is: ", args)
+func waitForNewData(cache storage.Cache, keys, ids []string) {
+	newDataChan := make(chan bool)
+	go func(cache storage.Cache, keys, ids []string) {
+		ticker := time.NewTicker(10 * time.Millisecond)
+		defer ticker.Stop()
+		for {
+			<-ticker.C
+			for i, key := range keys {
+				redisValueForKey, exists := cache.Get(key)
+				if !exists {
+					continue
+				}
+				entityId := ParseStreamEntryID(ids[i])
+				newLen := len(redisValueForKey.(*storage.StreamValue).GetEntriesGreaterThan(entityId))
+				if newLen > 0 {
+					newDataChan <- true
+					return
+				}
+			}
+		}
+	}(cache, keys, ids)
+
+	<-newDataChan
+}
+
+func handleBlockCommand(args []string, cache storage.Cache) []string {
 	if len(args) > 2 && strings.ToUpper(args[1]) == "BLOCK" {
 		waitPeriod, err := strconv.ParseInt(args[2], 10, 64)
 		if err != nil {
-			return protocol.BuildError(fmt.Sprintf("invalid blocking period: %s", args[2]))
+			log.Printf("Invalid BLOCK period: %s", args[2])
+			return args
 		}
-		time.Sleep(time.Duration(waitPeriod) * time.Millisecond)
 		args = append([]string{args[0]}, args[3:]...) // Remove BLOCK and timeout
-	}
+		keysCount := (len(args) - 2) / 2
+		keys := args[2 : 2+keysCount]
+		ids := args[2+keysCount:]
 
+		if waitPeriod == 0 {
+			waitForNewData(cache, keys, ids)
+		} else {
+			time.Sleep(time.Duration(waitPeriod) * time.Millisecond)
+		}
+	}
+	return args
+}
+
+func processStreams(args []string, cache storage.Cache) string {
 	var startEntryId storage.EntryID
 	var entries []any
 	keysCount := (len(args) - 2) / 2
@@ -51,6 +85,16 @@ func (x *XReadCommand) Execute(args []string, cache storage.Cache) string {
 	}
 
 	return protocol.BuildArray(entries)
+
+}
+
+// Execute implements Command.
+func (x *XReadCommand) Execute(args []string, cache storage.Cache) string {
+	log.Println("value of args is: ", args)
+	processedArgs := handleBlockCommand(args, cache)
+
+	return processStreams(processedArgs, cache)
+
 }
 
 func preprocessXReadArgs(args []string) ([]string, error) {
