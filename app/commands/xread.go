@@ -26,13 +26,7 @@ func waitForNewData(cache storage.Cache, keys, ids []string) {
 					continue
 				}
 				var entityId storage.EntryID
-				if ids[i] == "$" {
-					entries := redisValueForKey.(*storage.StreamValue).Entries
-					lastEntry := entries[len(entries)-1]
-					entityId = lastEntry.ID
-				} else {
-					entityId = *ParseStreamEntryID(ids[i])
-				}
+				entityId = *ParseStreamEntryID(ids[i])
 				newLen := len(redisValueForKey.(*storage.StreamValue).GetEntriesGreaterThan(&entityId))
 				if newLen > 0 {
 					newDataChan <- true
@@ -45,7 +39,24 @@ func waitForNewData(cache storage.Cache, keys, ids []string) {
 	<-newDataChan
 }
 
+func preProcessEntryIds(keys, ids []string, cache storage.Cache) []string {
+	for i, key := range keys {
+		redisValueForKey, exists := cache.Get(key)
+		if !exists {
+			ids[i] = "0-0"
+			continue
+		}
+		if ids[i] == "$" {
+			entries := redisValueForKey.(*storage.StreamValue).Entries
+			lastEntry := entries[len(entries)-1]
+			ids[i] = lastEntry.ID.GetEntryID()
+		}
+	}
+	return ids
+}
+
 func handleBlockCommand(args []string, cache storage.Cache) []string {
+	var keys, ids []string
 	if len(args) > 2 && strings.ToUpper(args[1]) == "BLOCK" {
 		waitPeriod, err := strconv.ParseInt(args[2], 10, 64)
 		if err != nil {
@@ -54,14 +65,19 @@ func handleBlockCommand(args []string, cache storage.Cache) []string {
 		}
 		args = append([]string{args[0]}, args[3:]...) // Remove BLOCK and timeout
 		keysCount := (len(args) - 2) / 2
-		keys := args[2 : 2+keysCount]
-		ids := args[2+keysCount:]
-
+		keys = args[2 : 2+keysCount]
+		ids = args[2+keysCount:]
+		ids = preProcessEntryIds(keys, ids, cache)
 		if waitPeriod == 0 {
 			waitForNewData(cache, keys, ids)
 		} else {
 			time.Sleep(time.Duration(waitPeriod) * time.Millisecond)
 		}
+		result := []string{"XREAD", "STREAMS"}
+		result = append(result, keys...)
+		result = append(result, ids...)
+		log.Printf("value of result and ids are %v, %v", result, ids)
+		return result
 	}
 	return args
 }
