@@ -2,7 +2,6 @@ package commands
 
 import (
 	"fmt"
-	"log"
 	"time"
 
 	"github.com/codecrafters-io/redis-starter-go/app/protocol"
