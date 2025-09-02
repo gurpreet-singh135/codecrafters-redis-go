@@ -52,13 +52,30 @@ func (c *SetCommand) Execute(args []string, cache storage.Cache) string {
 		}
 	}
 
-	stringValue := storage.StringValue{
-		Val:        value,
-		Expiration: expirationTime,
+	val, err := strconv.Atoi(value)
+	var redisValue storage.RedisValue
+	if err != nil {
+		redisValue = c.SetStringValue(key, value, expirationTime)
+	} else {
+		redisValue = c.SetIntValue(key, val, expirationTime)
 	}
 
-	cache.Set(key, &stringValue)
+	cache.Set(key, redisValue)
 	return protocol.BuildSimpleString(protocol.RESPONSE_OK)
+}
+
+func (c *SetCommand) SetStringValue(key string, val string, expirationTime time.Time) storage.RedisValue {
+	return &storage.StringValue{
+		Val:        val,
+		Expiration: expirationTime,
+	}
+}
+
+func (c *SetCommand) SetIntValue(key string, val int, expirationTime time.Time) storage.RedisValue {
+	return &storage.IntValue{
+		Val:        val,
+		Expiration: expirationTime,
+	}
 }
 
 func (c *SetCommand) Validate(args []string) error {

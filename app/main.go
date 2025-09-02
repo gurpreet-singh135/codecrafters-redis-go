@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"log"
 	"os"
 	"os/signal"
 	"syscall"
@@ -21,8 +22,7 @@ func main() {
 		sigChan := make(chan os.Signal, 1)
 		signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 		<-sigChan
-
-		fmt.Println("\nReceived shutdown signal")
+		log.Println("\nReceived shutdown signal")
 		redisServer.Stop()
 		os.Exit(0)
 	}()

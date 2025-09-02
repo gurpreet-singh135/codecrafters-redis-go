@@ -86,6 +86,10 @@ func BuildInteger(s string) string {
 	return ":" + s + CRLF
 }
 
+func BuildInt(s int) string {
+	return ":" + strconv.Itoa(s) + CRLF
+}
+
 // Build RESP Array
 func BuildArray(entries []any) string {
 	length := len(entries)
