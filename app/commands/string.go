@@ -26,6 +26,10 @@ func (c *GetCommand) Execute(args []string, cache storage.Cache) string {
 		return protocol.BuildBulkString(stringVal.GetValue())
 	}
 
+	if intValue, ok := value.(*storage.IntValue); ok {
+		return protocol.BuildBulkString(strconv.Itoa(intValue.Val))
+	}
+
 	return protocol.BuildBulkString("")
 }
 
