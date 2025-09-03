@@ -42,6 +42,7 @@ func NewCommandRegistry() *CommandRegistry {
 	registry.Register("BLPOP", &BLPopCommand{})
 	registry.Register("INCR", &IncrCommand{})
 	registry.Register("MULTI", &MultiCommand{})
+	registry.Register("EXEC", &ExecCommand{})
 
 	return registry
 }
