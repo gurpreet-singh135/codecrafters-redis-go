@@ -25,6 +25,7 @@ func (i *IncrCommand) Execute(args []string, cache storage.Cache) string {
 	value, isInteger := redisValue.(*storage.IntValue)
 	if !isInteger {
 		// TODO
+		return protocol.BuildError(protocol.NOT_AN_INTEGER)
 	}
 	value.Val += 1
 
