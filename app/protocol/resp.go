@@ -90,7 +90,7 @@ func BuildInt(s int) string {
 	return ":" + strconv.Itoa(s) + CRLF
 }
 
-// Build RESP Array
+// Build RESP Array from raw values (original function)
 func BuildArray(entries []any) string {
 	length := len(entries)
 
@@ -107,12 +107,30 @@ func BuildArray(entries []any) string {
 			res := BuildArray(v)
 			resp += res
 		case string:
+			// Format raw strings as bulk strings
 			length := len(v)
 			resp += "$" + strconv.Itoa(length) + CRLF
-			res := v + CRLF
-			resp += res
+			resp += v + CRLF
 		}
 	}
 
 	return resp
+}
+
+// BuildArrayFromResponses creates a RESP array from already-formatted RESP responses
+// This is specifically for transaction EXEC results where each element is already a complete RESP response
+func BuildArrayFromResponses(responses []string) string {
+	if len(responses) == 0 {
+		return BuildEmptyArray()
+	}
+
+	result := "*" + strconv.Itoa(len(responses)) + CRLF
+
+	for _, response := range responses {
+		// Each response is already a complete RESP-formatted string
+		// Just concatenate them directly
+		result += response
+	}
+
+	return result
 }

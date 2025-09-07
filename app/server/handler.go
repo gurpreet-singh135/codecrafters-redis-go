@@ -119,18 +119,9 @@ func (h *ConnectionHandler) processExecCommand() string {
 
 	result := h.transactionState.ExecuteTransaction(h.cache)
 	h.transactionState.EndTransaction()
-	if len(result) == 0 {
-		return protocol.BuildEmptyArray()
-	}
-	return protocol.BuildArray(h.ConvertToAny(result))
-}
 
-func (h *ConnectionHandler) ConvertToAny(slice []string) []any {
-	result := make([]any, 0, len(slice))
-	for _, str := range slice {
-		result = append(result, str)
-	}
-	return result
+	// Use the new function specifically designed for already-formatted RESP responses
+	return protocol.BuildArrayFromResponses(result)
 }
 
 func (h *ConnectionHandler) processDiscardCommand() string {
