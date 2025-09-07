@@ -1,6 +1,7 @@
 package commands
 
 import (
+	"fmt"
 	"log"
 	"strings"
 
@@ -17,6 +18,25 @@ type Command interface {
 // CommandRegistry manages all available Redis commands
 type CommandRegistry struct {
 	commands map[string]Command
+}
+
+type TransactionAwareCommand interface {
+	Command
+	ExecuteInTransaction(args []string, cache storage.Cache, ts *TransactionState)
+}
+
+type CommandExecutionResult struct {
+	Response string
+	Error    error
+	Success  bool
+}
+
+func NewCommandExecutionResult(response string, err error) *CommandExecutionResult {
+	return &CommandExecutionResult{
+		Response: response,
+		Error:    err,
+		Success:  err == nil,
+	}
 }
 
 // NewCommandRegistry creates a new command registry with all commands
@@ -71,4 +91,12 @@ func (r *CommandRegistry) Execute(cmdName string, args []string, cache storage.C
 func (r *CommandRegistry) HasCommand(cmdName string) bool {
 	_, exists := r.commands[strings.ToUpper(cmdName)]
 	return exists
+}
+
+func (r *CommandRegistry) GetCommand(cmdName string) (Command, error) {
+	Cmd, exists := r.commands[strings.ToUpper(cmdName)]
+	if !exists {
+		return nil, fmt.Errorf("Given command: %s is not supported yet", cmdName)
+	}
+	return Cmd, nil
 }

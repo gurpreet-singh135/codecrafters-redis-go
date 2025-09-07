@@ -125,7 +125,7 @@ func (c *InMemoryCache) AddToStream(key string, entry *StreamEntry) (string, err
 			// Validate the new entry ID using the stream's validation method
 			newEntryID, err = streamVal.AddEntry(entry)
 			if err != nil {
-				return protocol.EMPTY_STRING, errors.New(protocol.INVALID_ENTRY_ID)
+				return protocol.EMPTY_STRING, err
 			}
 		} else {
 			return protocol.EMPTY_STRING, errors.New("WRONGTYPE Operation against a key holding the wrong kind of value")

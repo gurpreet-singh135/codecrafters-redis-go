@@ -128,7 +128,7 @@ func (s *StreamValue) GetEntries() []StreamEntry {
 func (s *StreamValue) AddEntry(entry *StreamEntry) (*EntryID, error) {
 	newEntryID, err := s.IsValidNewEntryID(entry.ID.GetEntryID())
 	if err != nil {
-		return NewEntryID(""), errors.New(protocol.INVALID_ENTRY_ID)
+		return NewEntryID(""), err
 	}
 	entry.ID = *newEntryID
 	// (&entry.ID).ParseStreamEntryID()
@@ -198,5 +198,5 @@ func ValidateEntryIDOrder(entryID, lastEntryID string) (*EntryID, error) {
 
 	}
 
-	return NewEntryID(""), errors.New("invalid entry ID")
+	return NewEntryID(""), errors.New(protocol.INVALID_ENTRY_ID)
 }
