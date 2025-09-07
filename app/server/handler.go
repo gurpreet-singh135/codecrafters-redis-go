@@ -70,11 +70,6 @@ func (h *ConnectionHandler) Handle() {
 }
 
 func (h *ConnectionHandler) processCommand(cmdName string, args []string) string {
-	Command, err := h.registry.GetCommand(cmdName)
-	if err != nil {
-		return protocol.BuildError("Invalid command")
-	}
-
 	switch cmdName {
 	case "MULTI":
 		return h.processMultiCommand()
@@ -82,6 +77,11 @@ func (h *ConnectionHandler) processCommand(cmdName string, args []string) string
 		return h.processExecCommand()
 	case "DISCARD":
 		return h.processDiscardCommand()
+	}
+
+	Command, err := h.registry.GetCommand(cmdName)
+	if err != nil {
+		return protocol.BuildError("Invalid command")
 	}
 
 	if h.transactionState.IsInTransaction() {
