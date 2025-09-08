@@ -11,6 +11,7 @@ import (
 	"github.com/codecrafters-io/redis-starter-go/app/commands"
 	"github.com/codecrafters-io/redis-starter-go/app/protocol"
 	"github.com/codecrafters-io/redis-starter-go/app/storage"
+	"github.com/codecrafters-io/redis-starter-go/app/types"
 )
 
 // ConnectionHandler handles individual client connections
@@ -20,16 +21,18 @@ type ConnectionHandler struct {
 	registry         *commands.CommandRegistry
 	reader           *bufio.Reader
 	transactionState *commands.TransactionState
+	metadata         *types.ServerMetadata
 }
 
 // NewConnectionHandler creates a new connection handler
-func NewConnectionHandler(conn net.Conn, cache storage.Cache, registry *commands.CommandRegistry) *ConnectionHandler {
+func NewConnectionHandler(conn net.Conn, cache storage.Cache, registry *commands.CommandRegistry, metadata *types.ServerMetadata) *ConnectionHandler {
 	return &ConnectionHandler{
 		conn:             conn,
 		cache:            cache,
 		registry:         registry,
 		reader:           bufio.NewReader(conn),
 		transactionState: commands.NewTransactionState(),
+		metadata:         metadata,
 	}
 }
 
@@ -98,6 +101,7 @@ func (h *ConnectionHandler) processCommand(cmdName string, args []string) string
 		Cmd:       Command,
 		Args:      args,
 		Timestamp: time.Now().UnixNano(),
+		Metadata:  h.metadata,
 	}
 
 	return queueCommand.Execute(h.cache)

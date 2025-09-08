@@ -2,11 +2,10 @@ package commands
 
 import (
 	"fmt"
-	"log"
 	"strings"
 
-	"github.com/codecrafters-io/redis-starter-go/app/protocol"
 	"github.com/codecrafters-io/redis-starter-go/app/storage"
+	"github.com/codecrafters-io/redis-starter-go/app/types"
 )
 
 // Command interface defines the contract for Redis commands
@@ -15,14 +14,14 @@ type Command interface {
 	Validate(args []string) error
 }
 
+type ServerAwareCommand interface {
+	Command
+	ExecuteWithMetadata(args []string, cache storage.Cache, metadata *types.ServerMetadata) string
+}
+
 // CommandRegistry manages all available Redis commands
 type CommandRegistry struct {
 	commands map[string]Command
-}
-
-type TransactionAwareCommand interface {
-	Command
-	ExecuteInTransaction(args []string, cache storage.Cache, ts *TransactionState)
 }
 
 type CommandExecutionResult struct {
@@ -63,6 +62,7 @@ func NewCommandRegistry() *CommandRegistry {
 	registry.Register("INCR", &IncrCommand{})
 	registry.Register("MULTI", &MultiCommand{})
 	registry.Register("EXEC", &ExecCommand{})
+	registry.Register("INFO", &InfoCommand{})
 
 	return registry
 }
@@ -72,20 +72,20 @@ func (r *CommandRegistry) Register(name string, cmd Command) {
 	r.commands[strings.ToUpper(name)] = cmd
 }
 
-// Execute runs a command with the given arguments
-func (r *CommandRegistry) Execute(cmdName string, args []string, cache storage.Cache) string {
-	cmd, exists := r.commands[strings.ToUpper(cmdName)]
-	if !exists {
-		return protocol.BuildError("unknown command '" + cmdName + "'")
-	}
+// // Execute runs a command with the given arguments
+// func (r *CommandRegistry) Execute(cmdName string, args []string, cache storage.Cache) string {
+// 	cmd, exists := r.commands[strings.ToUpper(cmdName)]
+// 	if !exists {
+// 		return protocol.BuildError("unknown command '" + cmdName + "'")
+// 	}
 
-	if err := cmd.Validate(args); err != nil {
-		return protocol.BuildError(err.Error())
-	}
+// 	if err := cmd.Validate(args); err != nil {
+// 		return protocol.BuildError(err.Error())
+// 	}
 
-	log.Printf("Values of cmd, and args are %s, %v", cmdName, args)
-	return cmd.Execute(args, cache)
-}
+// 	log.Printf("Values of cmd, and args are %s, %v", cmdName, args)
+// 	return cmd.Execute(args, cache)
+// }
 
 // HasCommand checks if a command exists in the registry
 func (r *CommandRegistry) HasCommand(cmdName string) bool {

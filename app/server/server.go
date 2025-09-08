@@ -7,21 +7,25 @@ import (
 
 	"github.com/codecrafters-io/redis-starter-go/app/commands"
 	"github.com/codecrafters-io/redis-starter-go/app/storage"
+	"github.com/codecrafters-io/redis-starter-go/app/types"
 )
 
 // RedisServer represents the Redis server instance
 type RedisServer struct {
-	address  string
-	cache    storage.Cache
-	registry *commands.CommandRegistry
+	address        string
+	cache          storage.Cache
+	registry       *commands.CommandRegistry
+	serverMetadata *types.ServerMetadata
 }
 
 // NewRedisServer creates a new Redis server instance
-func NewRedisServer(address string) *RedisServer {
+func NewRedisServer(address, role string) *RedisServer {
+	metadata := types.NewServerMetadata(role)
 	return &RedisServer{
-		address:  address,
-		cache:    storage.NewCache(),
-		registry: commands.NewCommandRegistry(),
+		address:        address,
+		cache:          storage.NewCache(),
+		registry:       commands.NewCommandRegistry(),
+		serverMetadata: metadata,
 	}
 }
 
@@ -46,7 +50,7 @@ func (s *RedisServer) Start() {
 		}
 
 		// Handle each connection in a separate goroutine
-		go NewConnectionHandler(conn, s.cache, s.registry).Handle()
+		go NewConnectionHandler(conn, s.cache, s.registry, s.serverMetadata).Handle()
 	}
 }
 
