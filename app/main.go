@@ -37,7 +37,7 @@ func Send(conn net.Conn, command []any) {
 	fmt.Printf("Received: %s", response)
 }
 
-func ConnectToPrimaryInstance(address string, sInstancePort string) {
+func Handshake(address string, sInstancePort string) {
 	// Connect to the TCP server
 	conn, err := net.Dial("tcp", address)
 	if err != nil {
@@ -50,13 +50,18 @@ func ConnectToPrimaryInstance(address string, sInstancePort string) {
 	command := []any{"PING"}
 	Send(conn, command)
 
-	// Step 2: REPLCONF listening-port <PORT>
+	// Step 2a: REPLCONF listening-port <PORT>
 	command = []any{"REPLCONF", "listening-port", sInstancePort}
 	Send(conn, command)
 
-	// Step 3. REPLCONF capa psync2
+	// Step 2b: REPLCONF capa psync2
 	command = []any{"REPLCONF", "capa", "psync2"}
 	Send(conn, command)
+
+	// Step 3: PSYNC ? -1
+	command = []any{"PSYNC", "?", "-1"}
+	Send(conn, command)
+
 }
 
 func ProcessServerMetadata() (*types.ServerMetadata, string) {
@@ -69,7 +74,7 @@ func ProcessServerMetadata() (*types.ServerMetadata, string) {
 		master_replid = utility.GenerateRandomString(40)
 	} else {
 		addrs := strings.Split(replicaOf, " ")
-		ConnectToPrimaryInstance(addrs[0]+":"+addrs[1], portFlag)
+		Handshake(addrs[0]+":"+addrs[1], portFlag)
 		role = "slave"
 	}
 	metadata := types.NewServerMetadata(role)
