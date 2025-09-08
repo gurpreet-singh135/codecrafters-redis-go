@@ -16,7 +16,7 @@ type Command interface {
 
 type ServerAwareCommand interface {
 	Command
-	ExecuteWithMetadata(args []string, cache storage.Cache, metadata *types.ServerMetadata) string
+	ExecuteWithMetadata(args []string, cache storage.Cache, metadata *types.ServerMetadata) []string
 }
 
 // CommandRegistry manages all available Redis commands

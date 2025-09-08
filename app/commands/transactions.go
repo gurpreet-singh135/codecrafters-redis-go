@@ -50,13 +50,13 @@ func (t *TransactionState) QueueCommand(Cmd Command, args []string) error {
 	return nil
 }
 
-func (t *TransactionState) ExecuteTransaction(cache storage.Cache) []string {
+func (t *TransactionState) ExecuteTransaction(cache storage.Cache) [][]string {
 	t.mutex.RLock()
 	commands := make([]*QueueCommand, len(t.QueueCommands))
 	copy(commands, t.QueueCommands)
 	t.mutex.RUnlock()
 
-	result := make([]string, 0, t.QueueSize())
+	result := make([][]string, 0, t.QueueSize())
 	for _, queuedCommand := range commands {
 		result = append(result, queuedCommand.Execute(cache))
 	}

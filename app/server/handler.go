@@ -62,17 +62,19 @@ func (h *ConnectionHandler) Handle() {
 		// response := h.registry.Execute(command, respRequest, h.cache)
 
 		// Send response
-		_, err = h.conn.Write([]byte(response))
-		if err != nil {
-			log.Printf("Error writing response: %v", err)
-			break
+		for _, res := range response {
+			_, err = h.conn.Write([]byte(res))
+			if err != nil {
+				log.Printf("Error writing response: %v", err)
+				break
+			}
 		}
 	}
 
 	fmt.Printf("Connection from %s closed\n", h.conn.RemoteAddr())
 }
 
-func (h *ConnectionHandler) processCommand(cmdName string, args []string) string {
+func (h *ConnectionHandler) processCommand(cmdName string, args []string) []string {
 	switch cmdName {
 	case "MULTI":
 		return h.processMultiCommand()
@@ -84,16 +86,16 @@ func (h *ConnectionHandler) processCommand(cmdName string, args []string) string
 
 	Command, err := h.registry.GetCommand(cmdName)
 	if err != nil {
-		return protocol.BuildError("Invalid command")
+		return []string{protocol.BuildError("Invalid command")}
 	}
 
 	if h.transactionState.IsInTransaction() {
 		// QUEUE commands
 		err := h.transactionState.QueueCommand(Command, args)
 		if err != nil {
-			return protocol.BuildError(err.Error())
+			return []string{protocol.BuildError(err.Error())}
 		}
-		return protocol.BuildSimpleString(protocol.RESPONSE_QUEUED)
+		return []string{protocol.BuildSimpleString(protocol.RESPONSE_QUEUED)}
 	}
 
 	// Otherwise execute them
@@ -107,32 +109,36 @@ func (h *ConnectionHandler) processCommand(cmdName string, args []string) string
 	return queueCommand.Execute(h.cache)
 }
 
-func (h *ConnectionHandler) processMultiCommand() string {
+func (h *ConnectionHandler) processMultiCommand() []string {
 	if h.transactionState.IsInTransaction() {
-		return protocol.BuildError(protocol.MULTI_IN_MULTI)
+		return []string{protocol.BuildError(protocol.MULTI_IN_MULTI)}
 	}
 
 	h.transactionState.StartTransaction()
-	return protocol.BuildSimpleString("OK")
+	return []string{protocol.BuildSimpleString("OK")}
 }
 
-func (h *ConnectionHandler) processExecCommand() string {
+func (h *ConnectionHandler) processExecCommand() []string {
 	if !h.transactionState.IsInTransaction() {
-		return protocol.BuildError(protocol.EXEC_BEFORE_MULTI)
+		return []string{protocol.BuildError(protocol.EXEC_BEFORE_MULTI)}
 	}
 
 	result := h.transactionState.ExecuteTransaction(h.cache)
+	res := make([]string, 0, len(result))
+	for _, val := range result {
+		res = append(res, val...)
+	}
 	h.transactionState.EndTransaction()
 
 	// Use the new function specifically designed for already-formatted RESP responses
-	return protocol.BuildArrayFromResponses(result)
+	return []string{protocol.BuildArrayFromResponses(res)}
 }
 
-func (h *ConnectionHandler) processDiscardCommand() string {
+func (h *ConnectionHandler) processDiscardCommand() []string {
 	if !h.transactionState.IsInTransaction() {
-		return protocol.BuildError(protocol.DISCARD_WITHOUT_MULTI)
+		return []string{protocol.BuildError(protocol.DISCARD_WITHOUT_MULTI)}
 	}
 
 	h.transactionState.Reset()
-	return protocol.BuildSimpleString(protocol.RESPONSE_OK)
+	return []string{protocol.BuildSimpleString(protocol.RESPONSE_OK)}
 }

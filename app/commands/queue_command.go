@@ -13,14 +13,14 @@ type QueueCommand struct {
 	Metadata  *types.ServerMetadata
 }
 
-func (q *QueueCommand) Execute(cache storage.Cache) string {
+func (q *QueueCommand) Execute(cache storage.Cache) []string {
 	if err := q.Cmd.Validate(q.Args); err != nil {
-		return protocol.BuildError(err.Error())
+		return []string{protocol.BuildError(err.Error())}
 	}
 
 	if serverCmd, ok := q.Cmd.(ServerAwareCommand); ok {
 		return serverCmd.ExecuteWithMetadata(q.Args, cache, q.Metadata)
 	}
 
-	return q.Cmd.Execute(q.Args, cache)
+	return []string{q.Cmd.Execute(q.Args, cache)}
 }

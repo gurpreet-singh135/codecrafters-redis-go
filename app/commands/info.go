@@ -24,7 +24,7 @@ func (i *InfoCommand) Validate(args []string) error {
 	return nil
 }
 
-func (i *InfoCommand) ExecuteWithMetadata(args []string, cache storage.Cache, metadata *types.ServerMetadata) string {
+func (i *InfoCommand) ExecuteWithMetadata(args []string, cache storage.Cache, metadata *types.ServerMetadata) []string {
 	// convert server_metadata to string
-	return protocol.BuildBulkString(metadata.String())
+	return []string{protocol.BuildBulkString(metadata.String())}
 }
