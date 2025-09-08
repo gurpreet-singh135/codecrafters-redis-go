@@ -10,18 +10,32 @@ import (
 
 	"github.com/codecrafters-io/redis-starter-go/app/config"
 	"github.com/codecrafters-io/redis-starter-go/app/server"
+	"github.com/codecrafters-io/redis-starter-go/app/types"
 )
+
+func processServerMetadata() (*types.ServerMetadata, string) {
+	var portFlag, replicaOf, role string
+	flag.StringVar(&portFlag, "port", "6379", "This flag is used for specifying the port")
+	flag.StringVar(&replicaOf, "replicaof", "", "This flag is used to metion the master redis instance")
+	flag.Parse()
+	if replicaOf == "" {
+		role = "master"
+	} else {
+		role = "slave"
+	}
+	metadata := types.NewServerMetadata(role)
+
+	return metadata, config.DefaultHost + ":" + portFlag
+}
 
 func main() {
 	fmt.Println("Starting Redis server...")
-	var portFlag string
-	flag.StringVar(&portFlag, "port", "6379", "This flag is used for specifying the port")
-	role := "master"
 
+	metadata, address := processServerMetadata()
 	flag.Parse()
 
 	// Create and start the Redis server
-	redisServer := server.NewRedisServer(config.DefaultHost+":"+portFlag, role)
+	redisServer := server.NewRedisServer(address, metadata)
 
 	// Handle graceful shutdown
 	go func() {

@@ -19,8 +19,7 @@ type RedisServer struct {
 }
 
 // NewRedisServer creates a new Redis server instance
-func NewRedisServer(address, role string) *RedisServer {
-	metadata := types.NewServerMetadata(role)
+func NewRedisServer(address string, metadata *types.ServerMetadata) *RedisServer {
 	return &RedisServer{
 		address:        address,
 		cache:          storage.NewCache(),
