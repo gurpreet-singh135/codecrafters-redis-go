@@ -17,24 +17,14 @@ import (
 	"github.com/codecrafters-io/redis-starter-go/app/utility"
 )
 
-func ConnectToPrimaryInstance(address string) {
-	// Connect to the TCP server
-	conn, err := net.Dial("tcp", address)
-	if err != nil {
-		fmt.Println("Error connecting:", err)
-		return
-	}
-	defer conn.Close() // Close the connection when the main function exits
-
+func Send(conn net.Conn, command []any) {
 	// Send data to the server
-	message := make([]any, 0)
-	message = append(message, "PING")
-	_, err = conn.Write([]byte(protocol.BuildArray(message)))
+	_, err := conn.Write([]byte(protocol.BuildArray(command)))
 	if err != nil {
 		fmt.Println("Error sending data:", err)
 		return
 	}
-	fmt.Printf("Sent: %s", message)
+	fmt.Printf("Sent: %s", command[0])
 
 	// Receive response from the server
 	buffer := make([]byte, 1024)
@@ -47,6 +37,28 @@ func ConnectToPrimaryInstance(address string) {
 	fmt.Printf("Received: %s", response)
 }
 
+func ConnectToPrimaryInstance(address string, sInstancePort string) {
+	// Connect to the TCP server
+	conn, err := net.Dial("tcp", address)
+	if err != nil {
+		fmt.Println("Error connecting:", err)
+		return
+	}
+	defer conn.Close() // Close the connection when the main function exits
+
+	// Step 1: PING
+	command := []any{"PING"}
+	Send(conn, command)
+
+	// Step 2: REPLCONF listening-port <PORT>
+	command = []any{"REPLCONF", "listening-port", sInstancePort}
+	Send(conn, command)
+
+	// Step 3. REPLCONF capa psync2
+	command = []any{"REPLCONF", "capa", "psync2"}
+	Send(conn, command)
+}
+
 func ProcessServerMetadata() (*types.ServerMetadata, string) {
 	var portFlag, replicaOf, role, master_replid string
 	flag.StringVar(&portFlag, "port", "6379", "This flag is used for specifying the port")
@@ -57,7 +69,7 @@ func ProcessServerMetadata() (*types.ServerMetadata, string) {
 		master_replid = utility.GenerateRandomString(40)
 	} else {
 		addrs := strings.Split(replicaOf, " ")
-		ConnectToPrimaryInstance(addrs[0] + ":" + addrs[1])
+		ConnectToPrimaryInstance(addrs[0]+":"+addrs[1], portFlag)
 		role = "slave"
 	}
 	metadata := types.NewServerMetadata(role)
