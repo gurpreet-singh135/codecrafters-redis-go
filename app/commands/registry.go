@@ -63,6 +63,7 @@ func NewCommandRegistry() *CommandRegistry {
 	registry.Register("MULTI", &MultiCommand{})
 	registry.Register("EXEC", &ExecCommand{})
 	registry.Register("INFO", &InfoCommand{})
+	registry.Register("REPLCONF", &ReplConfCommand{})
 
 	return registry
 }
