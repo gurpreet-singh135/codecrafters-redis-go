@@ -44,6 +44,12 @@ func (m *ServerMetadata) Replicate(Cmd []string) {
 	m.ReplActiveConnection = activeConnections
 }
 
+func (m *ServerMetadata) NumberOfActiveConnections() int {
+	m.mutex.RLock()
+	defer m.mutex.RUnlock()
+	return len(m.ReplActiveConnection)
+}
+
 func (m *ServerMetadata) AddCommandProcessed(n int64) {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()

@@ -65,6 +65,7 @@ func NewCommandRegistry() *CommandRegistry {
 	registry.Register("INFO", &InfoCommand{})
 	registry.Register("REPLCONF", &ReplConfCommand{})
 	registry.Register("PSYNC", &PSyncCommand{})
+	registry.Register("WAIT", &WaitCommand{})
 
 	return registry
 }
