@@ -2,6 +2,7 @@ package commands
 
 import (
 	"fmt"
+	"log"
 	"strings"
 
 	"github.com/codecrafters-io/redis-starter-go/app/protocol"
@@ -26,6 +27,8 @@ func (r *ReplConfCommand) Validate(args []string) error {
 }
 
 func (r *ReplConfCommand) ExecuteWithMetadata(args []string, cache storage.Cache, metadata *types.ServerMetadata) []string {
+	log.Println("Inside the ExecuteWithMetadata of REPLCONF command")
+
 	resp := make([]string, 0)
 	if strings.ToUpper(args[1]) == "GETACK" {
 		response := utility.ConvertStringArrayToAny([]string{"REPLCONF", "ACK", fmt.Sprintf("%d", metadata.CommandProcessed)})
