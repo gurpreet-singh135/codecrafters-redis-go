@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net"
+	"strconv"
 	"strings"
 	"time"
 
@@ -23,6 +24,7 @@ type ConnectionHandler struct {
 	transactionState  *commands.TransactionState
 	metadata          *types.ServerMetadata // Metadata should have a list of active connections, it should get populated when PSYNC command is a success
 	isReplicationConn bool
+	connectionID      string
 }
 
 // NewConnectionHandler creates a new connection handler
@@ -35,6 +37,7 @@ func NewConnectionHandler(conn net.Conn, cache storage.Cache, registry *commands
 		transactionState:  commands.NewTransactionState(),
 		metadata:          metadata,
 		isReplicationConn: false,
+		connectionID:      fmt.Sprintf("conn-%p", conn),
 	}
 }
 
@@ -83,6 +86,18 @@ func (h *ConnectionHandler) Handle() {
 		if command == "REPLCONF" && !h.isReplicationConn {
 			h.isReplicationConn = true
 			log.Printf("Detected replication connection from %s", h.conn.RemoteAddr())
+		}
+
+		// Handle REPLCONF ACK responses for WAIT commands
+		if command == "REPLCONF" && len(respRequest) == 3 && strings.ToUpper(respRequest[1]) == "ACK" {
+			offsetStr := respRequest[2]
+			if offset, err := strconv.ParseInt(offsetStr, 10, 64); err == nil {
+				connID := h.metadata.GetConnectionID(h.conn)
+				if connID == "" {
+					connID = h.connectionID
+				}
+				h.metadata.SendAckResponse(connID, offset)
+			}
 		}
 		// response := h.registry.Execute(command, respRequest, h.cache)
 		if command == "PSYNC" {

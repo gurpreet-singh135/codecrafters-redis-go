@@ -6,10 +6,27 @@ import (
 	"net"
 	"reflect"
 	"sync"
+	"time"
 
 	"github.com/codecrafters-io/redis-starter-go/app/protocol"
 	"github.com/codecrafters-io/redis-starter-go/app/utility"
 )
+
+// AckResponse represents a REPLCONF ACK response from a replica
+type AckResponse struct {
+	ConnID string
+	Offset int64
+}
+
+// WaitRequest represents an active WAIT command
+type WaitRequest struct {
+	ID            string
+	TargetOffset  int64
+	RequiredCount int
+	ResponseChan  chan int
+	ReceivedAcks  map[string]int64 // ConnID -> Offset
+	StartTime     time.Time
+}
 
 type ServerMetadata struct {
 	// Replication info
@@ -27,6 +44,11 @@ type ServerMetadata struct {
 	ShutdownChannel            chan struct{} `json:"-"`
 	CommandProcessed           int64         `json:"-"`
 
+	// WAIT command support
+	AckResponseChannel chan AckResponse        `json:"-"`
+	WaitRequests       map[string]*WaitRequest `json:"-"`
+	ConnIDMap          map[net.Conn]string     `json:"-"`
+
 	mutex sync.RWMutex
 }
 
@@ -34,6 +56,11 @@ func (m *ServerMetadata) Replicate(Cmd []string) {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
 	activeConnections := make([]net.Conn, 0)
+
+	// Calculate the byte size of the command being replicated
+	cmdBytes := protocol.BuildArray(utility.ConvertStringArrayToAny(Cmd))
+	cmdSize := int64(len(cmdBytes))
+
 	for _, conn := range m.ReplActiveConnection {
 		err := m.Send(conn, Cmd)
 		if err == nil {
@@ -42,6 +69,11 @@ func (m *ServerMetadata) Replicate(Cmd []string) {
 		}
 	}
 	m.ReplActiveConnection = activeConnections
+
+	// Update master offset only if we successfully sent to at least one replica
+	if len(activeConnections) > 0 {
+		m.MasterReplOffset += cmdSize
+	}
 }
 
 func (m *ServerMetadata) NumberOfActiveConnections() int {
@@ -66,6 +98,13 @@ func (m *ServerMetadata) Send(conn net.Conn, Cmd []string) error {
 	return nil
 }
 
+// UpdateMasterOffset updates the master replication offset
+func (m *ServerMetadata) UpdateMasterOffset(bytes int64) {
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
+	m.MasterReplOffset += bytes
+}
+
 func (m *ServerMetadata) ReplicateCommandToReplicas() {
 	for {
 		select {
@@ -83,6 +122,73 @@ func (m *ServerMetadata) AddReplicasConnection(conn net.Conn) {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
 	m.ReplActiveConnection = append(m.ReplActiveConnection, conn)
+
+	// Generate connection ID for this replica
+	connID := fmt.Sprintf("replica-%p", conn)
+	m.ConnIDMap[conn] = connID
+}
+
+// GetConnectionID returns the connection ID for a given connection
+func (m *ServerMetadata) GetConnectionID(conn net.Conn) string {
+	m.mutex.RLock()
+	defer m.mutex.RUnlock()
+	return m.ConnIDMap[conn]
+}
+
+// RegisterWaitRequest registers a new WAIT request
+func (m *ServerMetadata) RegisterWaitRequest(req *WaitRequest) {
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
+	m.WaitRequests[req.ID] = req
+}
+
+// UnregisterWaitRequest removes a WAIT request
+func (m *ServerMetadata) UnregisterWaitRequest(id string) {
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
+	delete(m.WaitRequests, id)
+}
+
+// SendAckResponse sends an ACK response to the channel
+func (m *ServerMetadata) SendAckResponse(connID string, offset int64) {
+	ackResp := AckResponse{
+		ConnID: connID,
+		Offset: offset,
+	}
+
+	select {
+	case m.AckResponseChannel <- ackResp:
+	default:
+		// Channel full, drop the ACK (non-blocking)
+	}
+}
+
+// ProcessAckResponses processes incoming ACK responses from replicas
+func (m *ServerMetadata) ProcessAckResponses() {
+	for ackResp := range m.AckResponseChannel {
+		m.mutex.Lock()
+
+		// Check all active wait requests
+		for _, waitReq := range m.WaitRequests {
+			// Check if this ACK satisfies the wait condition
+			if ackResp.Offset >= waitReq.TargetOffset {
+				// Add to received ACKs if not already present or update with higher offset
+				if existingOffset, exists := waitReq.ReceivedAcks[ackResp.ConnID]; !exists || ackResp.Offset > existingOffset {
+					waitReq.ReceivedAcks[ackResp.ConnID] = ackResp.Offset
+
+					// Check if we have enough ACKs
+					if len(waitReq.ReceivedAcks) >= waitReq.RequiredCount {
+						select {
+						case waitReq.ResponseChan <- len(waitReq.ReceivedAcks):
+						default:
+						}
+					}
+				}
+			}
+		}
+
+		m.mutex.Unlock()
+	}
 }
 
 func NewServerMetadata(role string) *ServerMetadata {
@@ -91,8 +197,12 @@ func NewServerMetadata(role string) *ServerMetadata {
 		Role:                 role,
 		ReplChannel:          make(chan []string, 1_000),
 		ReplActiveConnection: make([]net.Conn, 0),
+		AckResponseChannel:   make(chan AckResponse, 100),
+		WaitRequests:         make(map[string]*WaitRequest),
+		ConnIDMap:            make(map[net.Conn]string),
 	}
 	go metadata.ReplicateCommandToReplicas()
+	go metadata.ProcessAckResponses()
 	return &metadata
 }
 
