@@ -37,15 +37,13 @@ func Send(conn net.Conn, command []any) {
 	fmt.Printf("Received: %s", response)
 }
 
-func Handshake(address string, sInstancePort string) {
+func Handshake(address string, sInstancePort string) (net.Conn, error) {
 	// Connect to the TCP server
 	conn, err := net.Dial("tcp", address)
 	if err != nil {
 		fmt.Println("Error connecting:", err)
-		return
+		return nil, err
 	}
-	defer conn.Close() // Close the connection when the main function exits
-
 	// Step 1: PING
 	command := []any{"PING"}
 	Send(conn, command)
@@ -62,10 +60,11 @@ func Handshake(address string, sInstancePort string) {
 	command = []any{"PSYNC", "?", "-1"}
 	Send(conn, command)
 
+	return conn, nil
 }
 
-func ProcessServerMetadata() (*types.ServerMetadata, string) {
-	var portFlag, replicaOf, role, master_replid string
+func ProcessServerMetadata() (*types.ServerMetadata, []string) {
+	var portFlag, replicaOf, role, master_replid, masterPort string
 	flag.StringVar(&portFlag, "port", "6379", "This flag is used for specifying the port")
 	flag.StringVar(&replicaOf, "replicaof", "", "This flag is used to metion the master redis instance")
 	flag.Parse()
@@ -74,23 +73,36 @@ func ProcessServerMetadata() (*types.ServerMetadata, string) {
 		master_replid = utility.GenerateRandomString(40)
 	} else {
 		addrs := strings.Split(replicaOf, " ")
-		Handshake(addrs[0]+":"+addrs[1], portFlag)
+		masterPort = addrs[1]
+		// Handshake(addrs[0]+":"+addrs[1], portFlag)
 		role = "slave"
 	}
 	metadata := types.NewServerMetadata(role)
 	metadata.MasterReplID = master_replid
 
-	return metadata, config.DefaultHost + ":" + portFlag
+	return metadata, []string{masterPort, portFlag}
 }
 
 func main() {
+
 	fmt.Println("Starting Redis server...")
 
-	metadata, address := ProcessServerMetadata()
-	flag.Parse()
+	metadata, ports := ProcessServerMetadata()
+	var redisServer *server.RedisServer
 
 	// Create and start the Redis server
-	redisServer := server.NewRedisServer(address, metadata)
+	if strings.ToLower(metadata.Role) == "slave" {
+		addr := config.DefaultHost + ":" + ports[1]
+		redisServer = server.NewRedisServer(addr, metadata)
+		conn, err := Handshake(config.DefaultHost+":"+ports[0], ports[1])
+		if err != nil {
+			redisServer.Stop()
+			os.Exit(1)
+		}
+		redisServer.StartSlave(conn)
+	} else {
+		redisServer = server.NewRedisServer(config.DefaultHost+":"+ports[1], metadata)
+	}
 
 	// Handle graceful shutdown
 	go func() {

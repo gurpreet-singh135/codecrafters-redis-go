@@ -3,6 +3,7 @@ package server
 import (
 	"bufio"
 	"fmt"
+	"io"
 	"log"
 	"net"
 	"strings"
@@ -49,12 +50,17 @@ func (h *ConnectionHandler) Handle() {
 			break
 		}
 
+		if len(respRequest) == 0 {
+			h.consumeEmptyRDB()
+			continue
+		}
+
 		log.Printf("RESP Request: %v", respRequest)
 
-		if len(respRequest) == 0 {
-			log.Println("Empty request received")
-			break
-		}
+		// if len(respRequest) == 0 {
+		// 	log.Println("Empty request received")
+		// 	break
+		// }
 
 		// Execute command
 		command := strings.ToUpper(respRequest[0])
@@ -67,6 +73,9 @@ func (h *ConnectionHandler) Handle() {
 
 		// Send response
 		for _, res := range response {
+			// if h.metadata.Role == "slave" {
+			// 	continue
+			// }
 			_, err = h.conn.Write([]byte(res))
 			if err != nil {
 				log.Printf("Error writing response: %v", err)
@@ -158,7 +167,7 @@ func (h *ConnectionHandler) processDiscardCommand() []string {
 }
 
 func (h *ConnectionHandler) SendCommandToReplicas(Cmd []string) {
-	if h.shouldReplicate(Cmd[0]) {
+	if h.metadata.Role == "master" && h.shouldReplicate(Cmd[0]) {
 		h.metadata.ReplChannel <- Cmd
 	}
 }
@@ -170,4 +179,15 @@ func (h *ConnectionHandler) shouldReplicate(cmdName string) bool {
 		"XADD": true, "MULTI": true, "EXEC": true, "DISCARD": true,
 	}
 	return writeCommands[cmdName]
+}
+
+func (h *ConnectionHandler) consumeEmptyRDB() {
+	// Always consume exactly 88 bytes (empty RDB file size)
+	rdbData := make([]byte, 88)
+	_, err := io.ReadFull(h.reader, rdbData)
+	if err != nil {
+		log.Printf("Error consuming empty RDB: %v", err)
+		return
+	}
+	log.Printf("Consumed empty RDB file (88 bytes)")
 }

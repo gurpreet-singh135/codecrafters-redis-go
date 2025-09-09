@@ -53,6 +53,11 @@ func (s *RedisServer) Start() {
 	}
 }
 
+func (s *RedisServer) StartSlave(conn net.Conn) {
+	go NewConnectionHandler(conn, s.cache, s.registry, s.serverMetadata).Handle()
+	s.Start()
+}
+
 // Stop gracefully stops the Redis server
 func (s *RedisServer) Stop() {
 	fmt.Println("Stopping Redis server...")
