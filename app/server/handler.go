@@ -82,8 +82,8 @@ func (h *ConnectionHandler) Handle() {
 
 		// Send response
 		for _, res := range response {
-			log.Printf("Response loop: isReplicationConn=%v, IsGetAck=%v, response=%s",
-				h.isReplicationConn, h.IsGetAck(respRequest), res)
+			// log.Printf("Response loop: isReplicationConn=%v, IsGetAck=%v, response=%s",
+			// 	h.isReplicationConn, h.IsGetAck(respRequest), res)
 			if h.isReplicationConn {
 				h.metadata.AddCommandProcessed(n)
 				if !h.IsGetAck(respRequest) {
