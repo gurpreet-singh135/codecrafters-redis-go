@@ -25,6 +25,7 @@ type ServerMetadata struct {
 	ReplActiveConnection       []net.Conn    `json:"-"`
 	ReplChannel                chan []string `json:"-"`
 	ShutdownChannel            chan struct{} `json:"-"`
+	CommandProcessed           int64         `json:"-"`
 
 	mutex sync.RWMutex
 }
@@ -41,6 +42,12 @@ func (m *ServerMetadata) Replicate(Cmd []string) {
 		}
 	}
 	m.ReplActiveConnection = activeConnections
+}
+
+func (m *ServerMetadata) AddCommandProcessed(n int64) {
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
+	m.CommandProcessed += n
 }
 
 func (m *ServerMetadata) Send(conn net.Conn, Cmd []string) error {
@@ -67,6 +74,8 @@ func (m *ServerMetadata) ReplicateCommandToReplicas() {
 }
 
 func (m *ServerMetadata) AddReplicasConnection(conn net.Conn) {
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
 	m.ReplActiveConnection = append(m.ReplActiveConnection, conn)
 }
 
@@ -82,8 +91,7 @@ func NewServerMetadata(role string) *ServerMetadata {
 }
 
 func (m *ServerMetadata) ToStringArray() []string {
-	m.mutex.Lock()
-	defer m.mutex.Unlock()
+	m.mutex.RLock()
 
 	log.Println("Inside ServerMetadata's ToStringArray method")
 
@@ -91,6 +99,7 @@ func (m *ServerMetadata) ToStringArray() []string {
 	result = append(result, "# Replication")
 	values := reflect.ValueOf(*(m.Copy()))
 	types := values.Type()
+	m.mutex.RUnlock()
 
 	for i := 0; i < values.NumField(); i += 1 {
 		field := types.Field(i)

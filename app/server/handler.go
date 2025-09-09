@@ -53,7 +53,7 @@ func (h *ConnectionHandler) Handle() {
 
 	for {
 		// Parse RESP request
-		respRequest, err := protocol.ParseRequest(h.reader)
+		respRequest, err, n := protocol.ParseRequest(h.reader)
 		if err != nil {
 			log.Printf("Connection closed or error parsing request: %v", err)
 			break
@@ -82,8 +82,11 @@ func (h *ConnectionHandler) Handle() {
 
 		// Send response
 		for _, res := range response {
-			if h.isReplicationConn && !h.IsGetAck(respRequest) {
-				continue
+			if h.isReplicationConn {
+				h.metadata.AddCommandProcessed(n)
+				if !h.IsGetAck(respRequest) {
+					continue
+				}
 			}
 			_, err = h.conn.Write([]byte(res))
 			if err != nil {

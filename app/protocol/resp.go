@@ -8,11 +8,14 @@ import (
 )
 
 // ParseRequest parses a RESP array request from the reader
-func ParseRequest(reader *bufio.Reader) ([]string, error) {
+func ParseRequest(reader *bufio.Reader) ([]string, error, int64) {
 	respRequest := []string{}
+	var numOfBytes int64
+	numOfBytes = 0
 	numOfLine, err := reader.ReadString('\n')
+	numOfBytes += int64(len(numOfLine))
 	if err != nil {
-		return RESP_ZERO_REQUEST, err
+		return RESP_ZERO_REQUEST, err, 0
 	}
 
 	numOfLine = strings.TrimSpace(numOfLine)
@@ -21,33 +24,35 @@ func ParseRequest(reader *bufio.Reader) ([]string, error) {
 	// RESP format check
 	if !strings.HasPrefix(numOfLine, "*") {
 		log.Println("invalid RESP command")
-		return RESP_ZERO_REQUEST, nil
+		return RESP_ZERO_REQUEST, nil, 0
 	}
 
 	lines, err := strconv.Atoi(numOfLine[1:])
 	if err != nil {
 		log.Printf("Error converting to int: %v, input was: %q", err, numOfLine[1:])
-		return RESP_ZERO_REQUEST, err
+		return RESP_ZERO_REQUEST, err, 0
 	}
 
 	for i := 0; i < lines; i++ {
 		// Read bulk string length line
-		_, err := reader.ReadString('\n')
+		l, err := reader.ReadString('\n')
+		numOfBytes += int64(len(l))
 		if err != nil {
-			return RESP_ZERO_REQUEST, err
+			return RESP_ZERO_REQUEST, err, 0
 		}
 
 		// Read bulk string data
 		command, err := reader.ReadString('\n')
+		numOfBytes += int64(len(command))
 		if err != nil {
-			return RESP_ZERO_REQUEST, err
+			return RESP_ZERO_REQUEST, err, 0
 		}
 
 		command = strings.TrimSpace(command)
 		respRequest = append(respRequest, command)
 	}
 
-	return respRequest, nil
+	return respRequest, nil, numOfBytes
 }
 
 // BuildBulkString creates a RESP bulk string
