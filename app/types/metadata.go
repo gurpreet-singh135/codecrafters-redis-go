@@ -43,6 +43,8 @@ type ServerMetadata struct {
 	ReplChannel                chan []string `json:"-"`
 	ShutdownChannel            chan struct{} `json:"-"`
 	CommandProcessed           int64         `json:"-"`
+	Dir                        string        `json:"-"`
+	DbFileName                 string        `json:"-"`
 
 	// WAIT command support
 	AckResponseChannel chan AckResponse        `json:"-"`
@@ -159,7 +161,8 @@ func (m *ServerMetadata) SendAckResponse(connID string, offset int64) {
 	select {
 	case m.AckResponseChannel <- ackResp:
 	default:
-		// Channel full, drop the ACK (non-blocking)
+		// Channel full, log warning but don't block
+		log.Printf("Warning: ACK response channel full, dropping ACK from %s", connID)
 	}
 }
 

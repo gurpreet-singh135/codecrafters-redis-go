@@ -11,7 +11,9 @@ const (
 	MaxArrayLength      = 1024 * 1024       // 1M elements
 
 	// Server limits
-	MaxConnections = 10000
-	ReadTimeout    = 30 // seconds
-	WriteTimeout   = 30 // seconds
+	MaxConnections      = 10000
+	ReadTimeout         = 30 // seconds
+	WriteTimeout        = 30 // seconds
+	CONFIG_DB_FILE_NAME = ""
+	CONFIG_DIR          = ""
 )

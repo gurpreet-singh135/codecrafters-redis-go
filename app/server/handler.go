@@ -75,18 +75,9 @@ func (h *ConnectionHandler) Handle() {
 
 		log.Printf("RESP Request: %v", respRequest)
 
-		// if len(respRequest) == 0 {
-		// 	log.Println("Empty request received")
-		// 	break
-		// }
-
 		// Execute command
 		command := strings.ToUpper(respRequest[0])
 		response := h.processCommand(command, respRequest)
-		if command == "REPLCONF" && !h.isReplicationConn {
-			h.isReplicationConn = true
-			log.Printf("Detected replication connection from %s", h.conn.RemoteAddr())
-		}
 
 		// Handle REPLCONF ACK responses for WAIT commands
 		if command == "REPLCONF" && len(respRequest) == 3 && strings.ToUpper(respRequest[1]) == "ACK" {
@@ -149,17 +140,6 @@ func (h *ConnectionHandler) Handle() {
 					shouldSendResponse = false
 				}
 			}
-			// if h.isReplicationConn {
-			// 	if h.IsGetAck(respRequest) {
-			// 		// GETACK: send response, don't increment offset
-			// 	} else if strings.ToUpper(respRequest[0]) == "REPLCONF" {
-			// 		// Other REPLCONF: send response, don't increment offset
-			// 	} else {
-			// 		// Data commands: increment offset, don't send response
-			// 		h.metadata.AddCommandProcessed(n)
-			// 		continue
-			// 	}
-			// }
 
 			if !shouldSendResponse {
 				continue

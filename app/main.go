@@ -70,8 +70,12 @@ func Handshake(address string, sInstancePort string) (net.Conn, error) {
 
 func ProcessServerMetadata() (*types.ServerMetadata, []string) {
 	var portFlag, replicaOf, role, master_replid, masterPort string
+	var dir, dbFileName string
+
 	flag.StringVar(&portFlag, "port", "6379", "This flag is used for specifying the port")
 	flag.StringVar(&replicaOf, "replicaof", "", "This flag is used to metion the master redis instance")
+	flag.StringVar(&dir, "dir", "", "This flag is used to configuring RDB directory")
+	flag.StringVar(&dbFileName, "dbfilename", "", "This flag is used to configuring RDB filename")
 	flag.Parse()
 	if replicaOf == "" {
 		role = "master"
@@ -84,6 +88,8 @@ func ProcessServerMetadata() (*types.ServerMetadata, []string) {
 	}
 	metadata := types.NewServerMetadata(role)
 	metadata.MasterReplID = master_replid
+	metadata.Dir = dir
+	metadata.DbFileName = dbFileName
 
 	return metadata, []string{masterPort, portFlag}
 }
