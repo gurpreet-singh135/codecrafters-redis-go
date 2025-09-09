@@ -116,6 +116,7 @@ func (h *ConnectionHandler) processCommand(cmdName string, args []string) []stri
 	}
 
 	Command, err := h.registry.GetCommand(cmdName)
+	log.Printf("Command being processed is: %s", cmdName)
 	if err != nil {
 		return []string{protocol.BuildError("Invalid command")}
 	}
