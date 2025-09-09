@@ -2,6 +2,7 @@ package protocol
 
 import (
 	"bufio"
+	"fmt"
 	"log"
 	"strconv"
 	"strings"
@@ -51,6 +52,7 @@ func ParseRequest(reader *bufio.Reader) ([]string, error, int64) {
 		command = strings.TrimSpace(command)
 		respRequest = append(respRequest, command)
 	}
+	fmt.Println("PARSE REQUEST")
 
 	return respRequest, nil, numOfBytes
 }
