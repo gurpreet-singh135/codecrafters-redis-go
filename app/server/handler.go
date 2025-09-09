@@ -17,24 +17,33 @@ import (
 
 // ConnectionHandler handles individual client connections
 type ConnectionHandler struct {
-	conn             net.Conn
-	cache            storage.Cache
-	registry         *commands.CommandRegistry
-	reader           *bufio.Reader
-	transactionState *commands.TransactionState
-	metadata         *types.ServerMetadata // Metadata should have a list of active connections, it should get populated when PSYNC command is a success
+	conn              net.Conn
+	cache             storage.Cache
+	registry          *commands.CommandRegistry
+	reader            *bufio.Reader
+	transactionState  *commands.TransactionState
+	metadata          *types.ServerMetadata // Metadata should have a list of active connections, it should get populated when PSYNC command is a success
+	isReplicationConn bool
 }
 
 // NewConnectionHandler creates a new connection handler
 func NewConnectionHandler(conn net.Conn, cache storage.Cache, registry *commands.CommandRegistry, metadata *types.ServerMetadata) *ConnectionHandler {
 	return &ConnectionHandler{
-		conn:             conn,
-		cache:            cache,
-		registry:         registry,
-		reader:           bufio.NewReader(conn),
-		transactionState: commands.NewTransactionState(),
-		metadata:         metadata,
+		conn:              conn,
+		cache:             cache,
+		registry:          registry,
+		reader:            bufio.NewReader(conn),
+		transactionState:  commands.NewTransactionState(),
+		metadata:          metadata,
+		isReplicationConn: false,
 	}
+}
+
+func (h *ConnectionHandler) IsGetAck(respRequest []string) bool {
+	if len(respRequest) != 3 {
+		return false
+	}
+	return strings.ToUpper(respRequest[0]) == "REPLCONF" && strings.ToUpper(respRequest[1]) == "GETACK"
 }
 
 // Handle processes commands from the client connection
@@ -73,9 +82,9 @@ func (h *ConnectionHandler) Handle() {
 
 		// Send response
 		for _, res := range response {
-			// if h.metadata.Role == "slave" {
-			// 	continue
-			// }
+			if h.isReplicationConn && !h.IsGetAck(respRequest) {
+				continue
+			}
 			_, err = h.conn.Write([]byte(res))
 			if err != nil {
 				log.Printf("Error writing response: %v", err)

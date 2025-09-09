@@ -54,7 +54,9 @@ func (s *RedisServer) Start() {
 }
 
 func (s *RedisServer) StartSlave(conn net.Conn) {
-	go NewConnectionHandler(conn, s.cache, s.registry, s.serverMetadata).Handle()
+	replicationHandler := NewConnectionHandler(conn, s.cache, s.registry, s.serverMetadata)
+	replicationHandler.isReplicationConn = true
+	go replicationHandler.Handle()
 	s.Start()
 }
 
