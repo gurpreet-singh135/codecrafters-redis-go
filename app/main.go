@@ -56,9 +56,14 @@ func Handshake(address string, sInstancePort string) (net.Conn, error) {
 	command = []any{"REPLCONF", "capa", "psync2"}
 	Send(conn, command)
 
-	// Step 3: PSYNC ? -1
-	command = []any{"PSYNC", "?", "-1"}
-	Send(conn, command)
+	// Step 3: PSYNC ? -1 - Send but DON'T read response
+	// The response (FULLRESYNC + RDB + future commands) will be handled by replication handler
+	_, err = conn.Write([]byte(protocol.BuildArray([]any{"PSYNC", "?", "-1"})))
+	if err != nil {
+		fmt.Println("Error sending PSYNC:", err)
+		return nil, err
+	}
+	fmt.Printf("Sent: PSYNC")
 
 	return conn, nil
 }

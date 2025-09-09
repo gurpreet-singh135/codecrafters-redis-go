@@ -36,5 +36,6 @@ func (r *ReplConfCommand) ExecuteWithMetadata(args []string, cache storage.Cache
 		return resp
 	}
 	resp = append(resp, protocol.BuildSimpleString(protocol.RESPONSE_OK))
+	log.Printf("REPLCONF returning response: %v", resp)
 	return resp
 }

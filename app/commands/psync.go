@@ -29,11 +29,13 @@ func (p *PSyncCommand) ExecuteWithMetadata(args []string, cache storage.Cache, m
 	replicationId := metadata.MasterReplID
 	offset := metadata.MasterReplOffset
 	masterResponse := protocol.BuildSimpleString(fmt.Sprintf("FULLRESYNC %s %d", replicationId, offset))
+
+	// Only return FULLRESYNC - RDB will be handled separately
+	return []string{masterResponse}
+}
+
+// Add method to get RDB data
+func (p *PSyncCommand) GetRDBData() ([]byte, error) {
 	emptyRDBFileHex := "524544495330303131fa0972656469732d76657205372e322e30fa0a72656469732d62697473c040fa056374696d65c26d08bc65fa08757365642d6d656dc2b0c41000fa08616f662d62617365c000fff06e3bfec0ff5aa2"
-	binaryData, err := hex.DecodeString(emptyRDBFileHex)
-	if err != nil {
-		return []string{protocol.BuildError("Failed to decode RDB file")}
-	}
-	RDBResponse := fmt.Sprintf("$%d\r\n%s", len(binaryData), binaryData)
-	return []string{masterResponse, RDBResponse}
+	return hex.DecodeString(emptyRDBFileHex)
 }

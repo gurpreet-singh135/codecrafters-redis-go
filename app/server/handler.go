@@ -3,7 +3,6 @@ package server
 import (
 	"bufio"
 	"fmt"
-	"io"
 	"log"
 	"net"
 	"strings"
@@ -43,15 +42,22 @@ func (h *ConnectionHandler) IsGetAck(respRequest []string) bool {
 	if len(respRequest) != 3 {
 		return false
 	}
+	log.Printf("IsGetAck method: %+v", respRequest)
 	return strings.ToUpper(respRequest[0]) == "REPLCONF" && strings.ToUpper(respRequest[1]) == "GETACK"
 }
 
 // Handle processes commands from the client connection
 func (h *ConnectionHandler) Handle() {
-	defer h.conn.Close()
+	// defer h.conn.Close()
+	defer func() {
+		log.Printf("Connection handler exiting for %s, isReplicationConn=%v",
+			h.conn.RemoteAddr(), h.isReplicationConn)
+		h.conn.Close()
+	}()
 	fmt.Printf("New connection from %s\n", h.conn.RemoteAddr())
 
 	for {
+		log.Printf("Waiting for next command...") // Add this
 		// Parse RESP request
 		respRequest, err, n := protocol.ParseRequest(h.reader)
 		if err != nil {
@@ -74,21 +80,74 @@ func (h *ConnectionHandler) Handle() {
 		// Execute command
 		command := strings.ToUpper(respRequest[0])
 		response := h.processCommand(command, respRequest)
+		if command == "REPLCONF" && !h.isReplicationConn {
+			h.isReplicationConn = true
+			log.Printf("Detected replication connection from %s", h.conn.RemoteAddr())
+		}
 		// response := h.registry.Execute(command, respRequest, h.cache)
 		if command == "PSYNC" {
-			// add connection to replicas
 			h.AddReplicasConnection()
+
+			// Send FULLRESYNC response first
+			for _, res := range response {
+				_, err = h.conn.Write([]byte(res))
+				if err != nil {
+					log.Printf("Error writing PSYNC response: %v", err)
+					break
+				}
+			}
+
+			// Send raw RDB data
+			psyncCmd := &commands.PSyncCommand{}
+			rdbData, err := psyncCmd.GetRDBData()
+			if err != nil {
+				log.Printf("Error getting RDB data: %v", err)
+				break
+			}
+
+			// Send RDB with proper bulk string header + raw binary
+			rdbHeader := fmt.Sprintf("$%d\r\n", len(rdbData))
+			h.conn.Write([]byte(rdbHeader))
+			h.conn.Write(rdbData)
+
+			continue // Skip normal response processing
 		}
 
 		// Send response
 		for _, res := range response {
-			// log.Printf("Response loop: isReplicationConn=%v, IsGetAck=%v, response=%s",
-			// 	h.isReplicationConn, h.IsGetAck(respRequest), res)
+			log.Printf("Response loop: isReplicationConn=%v, IsGetAck=%v, response=%s",
+				h.isReplicationConn, h.IsGetAck(respRequest), res)
+			shouldSendResponse := true
+
 			if h.isReplicationConn {
-				h.metadata.AddCommandProcessed(n)
-				if !h.IsGetAck(respRequest) {
-					continue
+				if h.IsGetAck(respRequest) {
+					// GETACK: always send response, don't count bytes
+					h.metadata.AddCommandProcessed(n)
+					shouldSendResponse = true
+				} else if strings.ToUpper(respRequest[0]) == "REPLCONF" {
+					// Other REPLCONF: send response, don't count bytes
+					shouldSendResponse = true
+					h.metadata.AddCommandProcessed(n)
+				} else {
+					// Data commands: count bytes, don't send response
+					h.metadata.AddCommandProcessed(n)
+					shouldSendResponse = false
 				}
+			}
+			// if h.isReplicationConn {
+			// 	if h.IsGetAck(respRequest) {
+			// 		// GETACK: send response, don't increment offset
+			// 	} else if strings.ToUpper(respRequest[0]) == "REPLCONF" {
+			// 		// Other REPLCONF: send response, don't increment offset
+			// 	} else {
+			// 		// Data commands: increment offset, don't send response
+			// 		h.metadata.AddCommandProcessed(n)
+			// 		continue
+			// 	}
+			// }
+
+			if !shouldSendResponse {
+				continue
 			}
 			_, err = h.conn.Write([]byte(res))
 			if err != nil {
@@ -106,6 +165,10 @@ func (h *ConnectionHandler) AddReplicasConnection() {
 }
 
 func (h *ConnectionHandler) processCommand(cmdName string, args []string) []string {
+	if cmdName == "REPLCONF" && !h.isReplicationConn {
+		h.isReplicationConn = true
+		log.Printf("Detected replication connection from %s", h.conn.RemoteAddr())
+	}
 	switch cmdName {
 	case "MULTI":
 		return h.processMultiCommand()
@@ -197,13 +260,18 @@ func (h *ConnectionHandler) shouldReplicate(cmdName string) bool {
 }
 
 func (h *ConnectionHandler) consumeEmptyRDB() {
-	// Always consume exactly 88 bytes (empty RDB file size)
-	rdbData := make([]byte, 88)
-	_, err := io.ReadFull(h.reader, rdbData)
-	if err != nil {
-		log.Printf("Error consuming empty RDB: %v", err)
-		return
+	// Read bytes until we find the start of next RESP command
+	for {
+		b, err := h.reader.ReadByte()
+		if err != nil {
+			log.Printf("Error consuming RDB: %v", err)
+			return
+		}
+		if b == '*' {
+			// Put the '*' back for the next ParseRequest
+			h.reader.UnreadByte()
+			break
+		}
 	}
-	log.Printf("Consumed RDB file (88 bytes)")
-	log.Printf("Continuing to listen for master commands...")
+	log.Printf("Consumed RDB file and found next command")
 }
