@@ -21,7 +21,7 @@ type ConnectionHandler struct {
 	registry         *commands.CommandRegistry
 	reader           *bufio.Reader
 	transactionState *commands.TransactionState
-	metadata         *types.ServerMetadata
+	metadata         *types.ServerMetadata // Metadata should have a list of active connections, it should get populated when PSYNC command is a success
 }
 
 // NewConnectionHandler creates a new connection handler
@@ -60,6 +60,10 @@ func (h *ConnectionHandler) Handle() {
 		command := strings.ToUpper(respRequest[0])
 		response := h.processCommand(command, respRequest)
 		// response := h.registry.Execute(command, respRequest, h.cache)
+		if command == "PSYNC" {
+			// add connection to replicas
+			h.AddReplicasConnection()
+		}
 
 		// Send response
 		for _, res := range response {
@@ -72,6 +76,10 @@ func (h *ConnectionHandler) Handle() {
 	}
 
 	fmt.Printf("Connection from %s closed\n", h.conn.RemoteAddr())
+}
+
+func (h *ConnectionHandler) AddReplicasConnection() {
+	h.metadata.AddReplicasConnection(h.conn)
 }
 
 func (h *ConnectionHandler) processCommand(cmdName string, args []string) []string {
@@ -105,7 +113,8 @@ func (h *ConnectionHandler) processCommand(cmdName string, args []string) []stri
 		Timestamp: time.Now().UnixNano(),
 		Metadata:  h.metadata,
 	}
-
+	// Here we can send the command to replica
+	h.SendCommandToReplicas(args)
 	return queueCommand.Execute(h.cache)
 }
 
@@ -115,6 +124,8 @@ func (h *ConnectionHandler) processMultiCommand() []string {
 	}
 
 	h.transactionState.StartTransaction()
+	// Send Command to Replicas from here
+	h.SendCommandToReplicas([]string{"MULTI"})
 	return []string{protocol.BuildSimpleString("OK")}
 }
 
@@ -130,6 +141,8 @@ func (h *ConnectionHandler) processExecCommand() []string {
 	}
 	h.transactionState.EndTransaction()
 
+	// Send the Command to Replicas from here
+	h.SendCommandToReplicas([]string{"EXEC"})
 	// Use the new function specifically designed for already-formatted RESP responses
 	return []string{protocol.BuildArrayFromResponses(res)}
 }
@@ -138,7 +151,23 @@ func (h *ConnectionHandler) processDiscardCommand() []string {
 	if !h.transactionState.IsInTransaction() {
 		return []string{protocol.BuildError(protocol.DISCARD_WITHOUT_MULTI)}
 	}
-
+	// Send to Replicas
 	h.transactionState.Reset()
+	h.SendCommandToReplicas([]string{"DISCARD"})
 	return []string{protocol.BuildSimpleString(protocol.RESPONSE_OK)}
+}
+
+func (h *ConnectionHandler) SendCommandToReplicas(Cmd []string) {
+	if h.shouldReplicate(Cmd[0]) {
+		h.metadata.ReplChannel <- Cmd
+	}
+}
+
+func (h *ConnectionHandler) shouldReplicate(cmdName string) bool {
+	writeCommands := map[string]bool{
+		"SET": true, "DEL": true, "INCR": true, "DECR": true,
+		"LPUSH": true, "RPUSH": true, "LPOP": true, "RPOP": true,
+		"XADD": true, "MULTI": true, "EXEC": true, "DISCARD": true,
+	}
+	return writeCommands[cmdName]
 }

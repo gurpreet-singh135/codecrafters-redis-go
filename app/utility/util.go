@@ -14,3 +14,11 @@ func GenerateRandomString(length int) string {
 	}
 	return string(b)
 }
+
+func ConvertStringArrayToAny(slice []string) []any {
+	result := make([]any, len(slice))
+	for i, str := range slice {
+		result[i] = str
+	}
+	return result
+}
