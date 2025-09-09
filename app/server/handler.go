@@ -204,5 +204,6 @@ func (h *ConnectionHandler) consumeEmptyRDB() {
 		log.Printf("Error consuming empty RDB: %v", err)
 		return
 	}
-	log.Printf("Consumed empty RDB file (88 bytes)")
+	log.Printf("Consumed RDB file (88 bytes)")
+	log.Printf("Continuing to listen for master commands...")
 }
